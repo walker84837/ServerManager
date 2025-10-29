@@ -1,8 +1,8 @@
-name: "${NAME}"
-main: "${PACKAGE}.ServerManagerPlugin"
-version: "${VERSION}"
-api-version: "${MCVERSION}"
-loader: "${PACKAGE}.ServerManagerLoader"
+name: ${NAME}
+version: ${VERSION}
+main: ${PACKAGE}.ServerManagerPlugin
+description: ${DESCRIPTION}
+api-version: ${MCVERSION}
+loader: ${PACKAGE}.ServerManagerLoader
 authors: ["winlogon"]
-description: "${DESCRIPTION}"
 folia-supported: true

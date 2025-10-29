@@ -73,6 +73,9 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
 
     implementation("com.github.walker84837:JResult:1.4.0")
+    implementation("de.exlll:configlib-paper:4.6.3")
+    implementation("com.github.oshi:oshi-core:6.4.0")
+    implementation("org.quartz-scheduler:quartz:2.3.2")
 
     testImplementation("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
     testImplementation("net.kyori:adventure-api:4.25.0")
