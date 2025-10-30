@@ -3,11 +3,11 @@ package org.winlogon.servermanager;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 
-import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import org.winlogon.servermanager.commands.TerminalCommand;
-import org.winlogon.servermanager.commands.SystemCommand;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+
+import org.winlogon.servermanager.commands.SystemCommand;
+import org.winlogon.servermanager.commands.TerminalCommand;
 
 public class CommandRegistrar {
     private final ServerManagerPlugin plugin;
@@ -43,11 +43,11 @@ public class CommandRegistrar {
                                 return builder.buildFuture();
                             })
                             .executes(context -> {
-                                String programName = context.getArgument("program", String.class);
-                                CommandSourceStack source = context.getSource();
+                                var programName = context.getArgument("program", String.class);
+                                var source = context.getSource();
 
                                 plugin.getProcessesExecutor().submit(() -> {
-                                    plugin.getProcessManager().startProcess(programName, source);
+                                    plugin.getProcessManager().startProcess(programName, source.getSender());
                                 });
 
                                 return Command.SINGLE_SUCCESS;
@@ -61,17 +61,17 @@ public class CommandRegistrar {
                                 return builder.buildFuture();
                             })
                             .executes(context -> {
-                                String programName = context.getArgument("program", String.class);
-                                CommandSourceStack source = context.getSource();
+                                var programName = context.getArgument("program", String.class);
+                                var source = context.getSource();
 
-                                plugin.getProcessManager().stopProcess(programName, source);
+                                plugin.getProcessManager().stopProcess(programName, source.getSender());
                                 return Command.SINGLE_SUCCESS;
                             })
                         )
                     )
                     .then(Commands.literal("list")
                         .executes(context -> {
-                            CommandSourceStack source = context.getSource();
+                            var source = context.getSource();
                             plugin.getProcessManager().listProcesses(source);
                             return Command.SINGLE_SUCCESS;
                         })
@@ -79,7 +79,7 @@ public class CommandRegistrar {
                     .then(Commands.literal("reload")
                         .requires(source -> source.getSender().hasPermission("processrunner.reload"))
                         .executes(context -> {
-                            CommandSourceStack source = context.getSource();
+                            var source = context.getSource();
                             plugin.reloadConfigs(source);
                             return Command.SINGLE_SUCCESS;
                         })
