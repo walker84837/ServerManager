@@ -4,18 +4,23 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import oshi.SystemInfo;
-import oshi.hardware.HardwareAbstractionLayer;
-import oshi.software.os.OperatingSystem;
-import oshi.util.FormatUtil;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+
 import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
+import org.winlogon.servermanager.OperatingSystem;
 import org.winlogon.servermanager.ServerManagerPlugin;
+
+import oshi.SystemInfo;
+import oshi.hardware.HardwareAbstractionLayer;
+import oshi.util.FormatUtil;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -23,6 +28,9 @@ import java.io.InputStreamReader;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
@@ -31,8 +39,8 @@ public class SystemCommand {
     private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
     private final SystemInfo systemInfo = new SystemInfo();
+    private final oshi.software.os.OperatingSystem os = systemInfo.getOperatingSystem();
     private final HardwareAbstractionLayer hardware = systemInfo.getHardware();
-    private final OperatingSystem os = systemInfo.getOperatingSystem();
 
     private final String permissionNode = "servermanager.command.system";
     private final Permission perm = new Permission(
@@ -84,25 +92,39 @@ public class SystemCommand {
 
         CompletableFuture.runAsync(() -> {
             try {
-                String osFamily = os.getFamily();
-                String installCommand;
+                var osType = OperatingSystem.Type.detect();
+                List<String> installCommand = new ArrayList<>();
 
                 // TODO: use OperatingSystem class to detect package install command
-                if (osFamily.contains("Windows")) {
+                if (osType == OperatingSystem.Type.WINDOWS) {
+                    installCommand.add("choco");
                     sender.sendMessage(Component.text("Package installation not supported on Windows.", NamedTextColor.RED));
                     return;
-                } else if (osFamily.contains("Ubuntu") || osFamily.contains("Debian")) {
-                    installCommand = "sudo apt-get install -y " + packageName;
-                } else if (osFamily.contains("CentOS") || osFamily.contains("Fedora") || osFamily.contains("Red Hat")) {
-                    installCommand = "sudo yum install -y " + packageName;
-                } else if (osFamily.contains("Arch") || osFamily.contains("Arch")) {
-                    installCommand = "sudo pacman -S --noconfirm " + packageName;
+
+                }
+
+                if (osType == OperatingSystem.Type.LINUX) {
+                    var osFamily = OperatingSystem.LinuxDistro.detect();
+                    installCommand.add("sudo");
+
+                    List<String> command = switch (osFamily) {
+                        case DEBIAN:
+                            yield Arrays.asList("apt-get", "install", "-y", packageName);
+                        case ARCH:
+                            yield Arrays.asList("pacman", "-S", "--noconfirm", packageName);
+                        case FEDORA:
+                            yield Arrays.asList("dnf", "install", "-y", packageName);
+                        default:
+                            yield Arrays.asList("echo", "Unsupported distro");
+                    };
+
+                    installCommand.addAll(command);
                 } else {
-                    sender.sendMessage(Component.text("Unsupported OS for package installation: " + osFamily, NamedTextColor.RED));
+                    sender.sendMessage("Unsupported OS for package installation");
                     return;
                 }
 
-                Process process = Runtime.getRuntime().exec(installCommand);
+                var process = Runtime.getRuntime().exec((String[]) installCommand.toArray());
 
                 var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
                 var output = new StringBuilder();
@@ -220,13 +242,16 @@ public class SystemCommand {
     }
 
     private int systemHealth(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-        var sender = source.getSender();
+        var sender = context.getSource().getSender();
 
         sender.sendMessage(Component.text("=== System Health ===", NamedTextColor.GOLD));
 
-        // OS Info
-        sender.sendMessage(Component.text("OS: " + os.getFamily() + " " + os.getVersionInfo(), NamedTextColor.AQUA));
+        sender.sendRichMessage(
+            "<aqua>OS: <family> <version></aqua>",
+            Placeholder.component("family", Component.text(os.getFamily(), NamedTextColor.DARK_AQUA)),
+            Placeholder.component("version", Component.text(os.getVersionInfo().toString(), NamedTextColor.AQUA))
+        );
+
         sender.sendMessage(Component.text("CPU: " + hardware.getProcessor().getProcessorIdentifier().getName(), NamedTextColor.AQUA));
 
         // RAM Usage
