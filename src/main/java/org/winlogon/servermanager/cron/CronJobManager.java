@@ -8,9 +8,10 @@ import org.winlogon.servermanager.config.CronConfig;
 import org.winlogon.servermanager.ExceptionWrappers;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Verify;
+// import com.google.common.base.Verify;
 
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.Logger;
 
 public class CronJobManager {
@@ -22,23 +23,24 @@ public class CronJobManager {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
         try {
-            this.scheduler = new StdSchedulerFactory().getScheduler();
+            Properties props = new Properties();
+            props.put("org.quartz.threadPool.threadCount", "1"); // Set thread count to 1
+            this.scheduler = new StdSchedulerFactory(props).getScheduler();
         } catch (SchedulerException e) {
             logger.severe("Failed to initialize scheduler: " + e.getMessage());
         }
     }
 
-    private void verifyState() {
-        Verify.verifyNotNull(scheduler);
-        // Check if scheduler is already started
+    public void startScheduler() {
+        if (scheduler == null) {
+            return;
+        }
+
+        // Verify.verifyNotNull(scheduler);
         Preconditions.checkState(
             !ExceptionWrappers.safe(() -> scheduler.isStarted()),
             "Scheduler is already started"
         );
-    }
-
-    public void startScheduler() {
-        verifyState();
 
         try {
             scheduler.start();
@@ -50,16 +52,20 @@ public class CronJobManager {
     }
 
     public void shutdownScheduler() {
-        verifyState();
+        if (scheduler == null) {
+            return;
+        }
 
         try {
+            if (scheduler.isShutdown()) {
+                return;
+            }
             // Wait for jobs to complete
             scheduler.shutdown(true);
+            logger.info("Cron scheduler shut down.");
         } catch (SchedulerException e) {
             logger.severe("Failed to shut down scheduler: " + e.getMessage());
         }
-
-        logger.info("Cron scheduler shut down.");
     }
 
     public void scheduleJobs(List<CronConfig> cronConfigs) {
