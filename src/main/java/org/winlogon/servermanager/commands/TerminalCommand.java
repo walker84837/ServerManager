@@ -4,10 +4,13 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+
 import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
@@ -19,7 +22,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
 public class TerminalCommand {
-
     private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
 
@@ -71,7 +73,7 @@ public class TerminalCommand {
                 int exitCode = process.waitFor();
 
                 if (exitCode == 0) {
-                    sender.sendMessage(Component.text("Command executed successfully. Output:", NamedTextColor.GREEN));
+                    sender.sendRichMessage("<green>Command executed successfully. Output:</green>");
                     sender.sendMessage(Component.text(output.toString(), NamedTextColor.WHITE));
                 } else {
                     BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
