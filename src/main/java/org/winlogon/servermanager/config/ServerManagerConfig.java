@@ -5,7 +5,6 @@ import de.exlll.configlib.Configuration;
 
 @Configuration
 public class ServerManagerConfig {
-
     @Comment("Enable or disable Discord webhook integration (requires discordWebhookUrl to be set)")
     public boolean discordWebhooksEnabled = false;
 

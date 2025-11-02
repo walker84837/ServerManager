@@ -8,7 +8,6 @@ import java.util.concurrent.TimeUnit;
 
 @Configuration
 public class ServiceConfig {
-
     @Comment("Commands to run before launching the program")
     public List<String> preLaunchCommands = List.of();
 

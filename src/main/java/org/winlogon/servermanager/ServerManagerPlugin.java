@@ -10,23 +10,25 @@ import de.exlll.configlib.YamlConfigurations;
 import de.exlll.configlib.ConfigLib;
 
 import org.bukkit.plugin.java.JavaPlugin;
+import org.winlogon.servermanager.config.CronConfig;
 import org.winlogon.servermanager.config.ServerManagerConfig;
 import org.winlogon.servermanager.config.ServiceConfig;
-import org.winlogon.servermanager.config.CronConfig;
 import org.winlogon.servermanager.cron.CronJobManager;
 import org.winlogon.servermanager.discord.DiscordWebhookSender;
 
 import oshi.SystemInfo;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 public final class ServerManagerPlugin extends JavaPlugin {
     private ServerManagerConfig mainConfig;
@@ -49,7 +51,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
             .build();
         
         // Load main config.yml
-        Path mainConfigPath = getDataFolder().toPath().resolve("config.yml");
+        var mainConfigPath = getDataFolder().toPath().resolve("config.yml");
         this.mainConfig = YamlConfigurations.update(mainConfigPath, ServerManagerConfig.class, configProperties);
         
         // Load service configs
@@ -89,7 +91,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
             getLogger().info("Discord webhook integration enabled.");
         }
         
-        getLogger().info("ProcessRunnerPlugin has been enabled!");
+        getLogger().info("ServerManager has been enabled!");
     }
 
     @Override
@@ -110,7 +112,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
             cronJobManager.shutdownScheduler();
         }
         
-        getLogger().info("ProcessRunnerPlugin has been disabled!");
+        getLogger().info("ServerManager has been disabled!");
     }
 
     public Map<String, ServiceConfig> getServiceConfigs() {
@@ -119,17 +121,11 @@ public final class ServerManagerPlugin extends JavaPlugin {
 
     private void loadServiceConfigs() {
         serviceConfigs.clear();
-        Path servicesFolder = getDataFolder().toPath().resolve("services");
-        if (!Files.exists(servicesFolder)) {
-            try {
-                Files.createDirectories(servicesFolder);
-            } catch (java.io.IOException e) {
-                getLogger().severe("Failed to create services directory: " + e.getMessage());
-                return;
-            }
-        }
+        var servicesFolder = getDataFolder().toPath().resolve("services");
 
-        try (Stream<Path> paths = Files.list(servicesFolder)) {
+        createFolderIfNotExists(servicesFolder);
+
+        try (var paths = Files.list(servicesFolder)) {
             paths
                 .filter(Files::isRegularFile)
                 .filter(p -> p.getFileName().toString().endsWith(".yml"))
@@ -146,17 +142,10 @@ public final class ServerManagerPlugin extends JavaPlugin {
 
     private void loadCronConfigs() {
         Path cronFolder = getDataFolder().toPath().resolve("cron");
-        if (!Files.exists(cronFolder)) {
-            try {
-                Files.createDirectories(cronFolder);
-            } catch (java.io.IOException e) {
-                getLogger().severe("Failed to create cron directory: " + e.getMessage());
-                return;
-            }
-        }
+        createFolderIfNotExists(cronFolder);
 
-        java.util.List<CronConfig> cronConfigs = new java.util.ArrayList<>();
-        try (java.util.stream.Stream<Path> paths = Files.list(cronFolder)) {
+        List<CronConfig> cronConfigs = new ArrayList<>();
+        try (var paths = Files.list(cronFolder)) {
             paths
                 .filter(Files::isRegularFile)
                 .filter(p -> p.getFileName().toString().endsWith(".yml"))
@@ -206,5 +195,16 @@ public final class ServerManagerPlugin extends JavaPlugin {
         source.getSender().sendMessage(
             Component.text("Configuration reloaded!", NamedTextColor.GREEN)
         );
+    }
+
+    public void createFolderIfNotExists(Path servicesFolder) {
+        if (!Files.exists(servicesFolder)) {
+            try {
+                Files.createDirectories(servicesFolder);
+            } catch (IOException e) {
+                getLogger().severe("Failed to create services directory: " + e.getMessage());
+                return;
+            }
+        }
     }
 }

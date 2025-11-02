@@ -5,7 +5,6 @@ import de.exlll.configlib.Configuration;
 
 @Configuration
 public class CronConfig {
-
     @Comment("The cron expression for scheduling (e.g., \"0 0 12 * * ?\")")
     public String expression = "";
 
