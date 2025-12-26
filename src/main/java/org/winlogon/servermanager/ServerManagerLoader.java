@@ -42,6 +42,5 @@ public class ServerManagerLoader implements PluginLoader {
 
     private RemoteRepository repo(String name, String url) {
         return new RemoteRepository.Builder(name, "default", url).build();
-
     }
 }

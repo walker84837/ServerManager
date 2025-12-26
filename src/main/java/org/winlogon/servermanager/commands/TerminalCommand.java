@@ -8,8 +8,7 @@ import com.mojang.brigadier.context.CommandContext;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
 import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
@@ -17,13 +16,19 @@ import org.bukkit.permissions.PermissionDefault;
 import org.winlogon.servermanager.ServerManagerPlugin;
 
 import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class TerminalCommand {
     private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
+    private final Logger logger;
 
     private final String permissionNode = "servermanager.command.terminal";
     private final Permission perm = new Permission(
@@ -34,6 +39,7 @@ public class TerminalCommand {
 
     public TerminalCommand(ServerManagerPlugin plugin) {
         this.plugin = plugin;
+        this.logger = plugin.getLogger();
 
         // Using the same executor as process management
         this.commandExecutor = plugin.getProcessesExecutor();
@@ -57,40 +63,50 @@ public class TerminalCommand {
         String command = StringArgumentType.getString(context, "command");
         var sender = context.getSource().getSender();
 
-        sender.sendMessage(Component.text("Executing command: " + command, NamedTextColor.YELLOW));
+        sender.sendRichMessage(
+            "<yellow>Executing command: <cmd></yellow>",
+            Placeholder.unparsed("cmd", command)
+        );
 
         CompletableFuture.runAsync(() -> {
             try {
-                var process = Runtime.getRuntime().exec(command);
-
-                var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                var output = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-
+                Process process = new ProcessBuilder(command.split(" ")).redirectErrorStream(true).start();
+                String output = readProcessOutput(process.getInputStream());
                 int exitCode = process.waitFor();
 
                 if (exitCode == 0) {
                     sender.sendRichMessage("<green>Command executed successfully. Output:</green>");
-                    sender.sendMessage(Component.text(output.toString(), NamedTextColor.WHITE));
+                    sender.sendRichMessage(
+                        "<white><out></white>",
+                        Placeholder.unparsed("out", output)
+                    );
                 } else {
-                    BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-                    StringBuilder errorOutput = new StringBuilder();
-                    while ((line = errorReader.readLine()) != null) {
-                        errorOutput.append(line).append("\n");
-                    }
-                    sender.sendMessage(Component.text("Command failed with exit code " + exitCode + ". Error:", NamedTextColor.RED));
-                    sender.sendMessage(Component.text(errorOutput.toString(), NamedTextColor.RED));
+                    String errorOutput = readProcessOutput(process.getErrorStream());
+                    sender.sendRichMessage(
+                        "<red>Command failed with exit code <exit-code>. Error:</red>",
+                        Placeholder.unparsed("exit-code", String.valueOf(exitCode))
+                    );
+                    sender.sendRichMessage(
+                        "<red><err></red>",
+                        Placeholder.unparsed("err", errorOutput)
+                    );
                 }
 
             } catch (Exception e) {
-                sender.sendMessage(Component.text("Error executing command: " + e.getMessage(), NamedTextColor.RED));
-                plugin.getLogger().severe("Error executing terminal command: " + e.getMessage());
+                sender.sendRichMessage(
+                    "<red>Error executing command: <error></red>",
+                    Placeholder.unparsed("error", e.getMessage())
+                );
+                logger.log(Level.SEVERE, "Error executing terminal command: " + e.getMessage());
             }
         }, commandExecutor);
 
         return Command.SINGLE_SUCCESS;
+    }
+
+    private String readProcessOutput(InputStream inputStream) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            return reader.lines().collect(Collectors.joining("\n"));
+        }
     }
 }

@@ -8,10 +8,7 @@ import com.mojang.brigadier.context.CommandContext;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 
 import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
@@ -29,9 +26,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
@@ -89,7 +84,7 @@ public class SystemCommand {
 
         sender.sendRichMessage(
             "<yellow>Attempting to install package: <pkg></yellow>",
-            Placeholder.component("pkg", Component.text(packageName, NamedTextColor.GOLD))
+            Placeholder.unparsed("pkg", packageName)
         );
 
         CompletableFuture.runAsync(() -> {
@@ -125,8 +120,7 @@ public class SystemCommand {
                     return;
                 }
 
-                // NOTE: original code used toArray incorrectly; leaving that as-is per your request to focus on sendRichMessage changes.
-                var process = Runtime.getRuntime().exec((String[]) installCommand.toArray());
+                Process process = new ProcessBuilder(installCommand).redirectErrorStream(true).start();
 
                 var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
                 var output = new StringBuilder();
@@ -137,15 +131,15 @@ public class SystemCommand {
 
                 int exitCode = process.waitFor();
 
-                // This looks not so great, and should be refactored to something better, but it works!
+                // TODO: This looks not so great, and should be refactored to something better, but it works!
                 if (exitCode == 0) {
                     sender.sendRichMessage(
                         "<green>Package '<name>' installed successfully. Output:</green>",
-                        Placeholder.component("name", Component.text(packageName, NamedTextColor.DARK_GREEN))
+                        Placeholder.unparsed("name", packageName)
                     );
                     sender.sendRichMessage(
                         "<white><out></white>",
-                        Placeholder.component("out", Component.text(output.toString(), NamedTextColor.DARK_GRAY))
+                        Placeholder.unparsed("out", output.toString())
                     );
                 } else {
                     var errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -155,18 +149,18 @@ public class SystemCommand {
                     }
                     sender.sendRichMessage(
                         "<red>Package installation failed with exit code <exit-code>. Error:</red>",
-                        Placeholder.component("exit-code", Component.text(exitCode, NamedTextColor.DARK_RED))
+                        Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
                         "<red><err></red>",
-                        Placeholder.component("err", Component.text(errorOutput.toString(), NamedTextColor.DARK_RED))
+                        Placeholder.unparsed("err", errorOutput.toString())
                     );
                 }
 
             } catch (Exception e) {
                 sender.sendRichMessage(
                     "<red>Error installing package: <err></red>",
-                    Placeholder.component("err", Component.text(e.getMessage(), NamedTextColor.DARK_RED))
+                    Placeholder.unparsed("err", e.getMessage())
                 );
                 plugin.getLogger().severe("Error installing package: " + e.getMessage());
             }
@@ -184,15 +178,15 @@ public class SystemCommand {
         sender.sendRichMessage("<gold>=== RAM Usage ===</gold>");
         sender.sendRichMessage(
             "<aqua>Total: <total></aqua>",
-            Placeholder.component("total", Component.text(FormatUtil.formatBytes(totalMemory), NamedTextColor.DARK_AQUA))
+            Placeholder.unparsed("total", FormatUtil.formatBytes(totalMemory))
         );
         sender.sendRichMessage(
             "<green>Used: <used></green>",
-            Placeholder.component("used", Component.text(FormatUtil.formatBytes(usedMemory), NamedTextColor.DARK_GREEN))
+            Placeholder.unparsed("used", FormatUtil.formatBytes(usedMemory))
         );
         sender.sendRichMessage(
             "<yellow>Available: <avail></yellow>",
-            Placeholder.component("avail", Component.text(FormatUtil.formatBytes(availableMemory), NamedTextColor.GOLD))
+            Placeholder.unparsed("avail", FormatUtil.formatBytes(availableMemory))
         );
 
         return Command.SINGLE_SUCCESS;
@@ -212,28 +206,23 @@ public class SystemCommand {
                 long usableSpace = store.getUsableSpace();
                 long usedSpace = totalSpace - usableSpace;
 
-                Map<String, TagResolver> map = new HashMap<String, TagResolver>();
-
-                var components = new Component[] {
-                    Component.text(root.getAbsolutePath(), NamedTextColor.DARK_AQUA),
-                    Component.text(FormatUtil.formatBytes(totalSpace), NamedTextColor.DARK_GRAY),
-                    Component.text(FormatUtil.formatBytes(usedSpace), NamedTextColor.DARK_GREEN),
-                    Component.text(FormatUtil.formatBytes(usableSpace), NamedTextColor.GOLD),
-                };
-
-                map.put("<aqua>Drive: <path></aqua>", Placeholder.component("path", components[0]));
-                map.put("<white>  Total: <total></white>", Placeholder.component("total", components[1]));
-                map.put("<green>  Used: <used></green>", Placeholder.component("used", components[2]));
-                map.put("<yellow>  Available: <avail></yellow>", Placeholder.component("avail", components[3]));
-
-                for (var entry : map.entrySet()) {
-                    sender.sendRichMessage(entry.getKey(), entry.getValue());
-                }
+                sender.sendRichMessage(
+                    """
+                    <aqua>Drive: <path></aqua>
+                      <white>Total: <total></white>
+                      <green>Used: <used></green>
+                      <yellow>Available: <avail></yellow>
+                    """,
+                    Placeholder.unparsed("path", root.getAbsolutePath()),
+                    Placeholder.unparsed("total", FormatUtil.formatBytes(totalSpace)),
+                    Placeholder.unparsed("used", FormatUtil.formatBytes(usedSpace)),
+                    Placeholder.unparsed("avail", FormatUtil.formatBytes(usableSpace))
+                );
             } catch (Exception e) {
                 sender.sendRichMessage(
                     "<red>Error checking storage for <path>: <err></red>",
-                    Placeholder.component("path", Component.text(root.getAbsolutePath(), NamedTextColor.DARK_RED)),
-                    Placeholder.component("err", Component.text(e.getMessage(), NamedTextColor.DARK_RED))
+                    Placeholder.unparsed("path", root.getAbsolutePath()),
+                    Placeholder.unparsed("err", e.getMessage())
                 );
                 plugin.getLogger().severe("Error checking storage: " + e.getMessage());
             }
@@ -244,18 +233,18 @@ public class SystemCommand {
 
     private int runShellCommand(CommandContext<CommandSourceStack> context) {
         String command = StringArgumentType.getString(context, "command");
-        CommandSourceStack source = context.getSource();
+        var source = context.getSource();
         var sender = source.getSender();
 
         // yellow -> GOLD for placeholder
         sender.sendRichMessage(
             "<yellow>Executing shell command: <cmd></yellow>",
-            Placeholder.component("cmd", Component.text(command, NamedTextColor.GOLD))
+            Placeholder.unparsed("cmd", command)
         );
 
         CompletableFuture.runAsync(() -> {
             try {
-                var process = Runtime.getRuntime().exec(command);
+                Process process = new ProcessBuilder(command.split(" ")).redirectErrorStream(true).start();
 
                 var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
                 var output = new StringBuilder();
@@ -270,7 +259,7 @@ public class SystemCommand {
                     sender.sendRichMessage("<green>Command executed successfully. Output:</green>");
                     sender.sendRichMessage(
                         "<white><out></white>",
-                        Placeholder.component("out", Component.text(output.toString(), NamedTextColor.DARK_GRAY))
+                        Placeholder.unparsed("out", output.toString())
                     );
                 } else {
                     var errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -280,18 +269,18 @@ public class SystemCommand {
                     }
                     sender.sendRichMessage(
                         "<red>Command failed with exit code <exit-code>. Error:</red>",
-                        Placeholder.component("exit-code", Component.text(exitCode, NamedTextColor.DARK_RED))
+                        Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
                         "<red><err></red>",
-                        Placeholder.component("err", Component.text(errorOutput.toString(), NamedTextColor.DARK_RED))
+                        Placeholder.unparsed("err", errorOutput.toString())
                     );
                 }
 
             } catch (Exception e) {
                 sender.sendRichMessage(
                     "<red>Error executing shell command: <error></red>",
-                    Placeholder.component("error", Component.text(e.getMessage(), NamedTextColor.DARK_RED))
+                    Placeholder.unparsed("error", e.getMessage())
                 );
                 plugin.getLogger().severe("Error executing shell command: " + e.getMessage());
             }
@@ -308,13 +297,13 @@ public class SystemCommand {
         // aqua -> placeholders use DARK_AQUA
         sender.sendRichMessage(
             "<aqua>OS: <family> <version></aqua>",
-            Placeholder.component("family", Component.text(os.getFamily(), NamedTextColor.DARK_AQUA)),
-            Placeholder.component("version", Component.text(os.getVersionInfo().toString(), NamedTextColor.DARK_AQUA))
+            Placeholder.unparsed("family", os.getFamily()),
+            Placeholder.unparsed("version", os.getVersionInfo().toString())
         );
 
         sender.sendRichMessage(
             "<aqua>CPU: <cpu></aqua>",
-            Placeholder.component("cpu", Component.text(hardware.getProcessor().getProcessorIdentifier().getName(), NamedTextColor.DARK_AQUA))
+            Placeholder.unparsed("cpu", hardware.getProcessor().getProcessorIdentifier().getName())
         );
 
         // RAM Usage
@@ -323,8 +312,8 @@ public class SystemCommand {
         long usedMemory = totalMemory - availableMemory;
         sender.sendRichMessage(
             "<aqua>RAM Used: <used> / <total></aqua>",
-            Placeholder.component("used", Component.text(FormatUtil.formatBytes(usedMemory), NamedTextColor.DARK_AQUA)),
-            Placeholder.component("total", Component.text(FormatUtil.formatBytes(totalMemory), NamedTextColor.DARK_AQUA))
+            Placeholder.unparsed("used", FormatUtil.formatBytes(usedMemory)),
+            Placeholder.unparsed("total", FormatUtil.formatBytes(totalMemory))
         );
 
         // CPU Load
@@ -338,7 +327,7 @@ public class SystemCommand {
             );
             sender.sendRichMessage(
                 "<aqua>CPU Load Average (1m, 5m, 15m): <stats></aqua>",
-                Placeholder.component("stats", Component.text(stats, NamedTextColor.DARK_AQUA))
+                Placeholder.unparsed("stats", stats)
             );
         }
 
@@ -351,8 +340,8 @@ public class SystemCommand {
             runningProcesses.forEach((name, handle) -> {
                 sender.sendRichMessage(
                     "<green>  - <proc> (PID: <pid>)</green>",
-                    Placeholder.component("proc", Component.text(name, NamedTextColor.DARK_GREEN)),
-                    Placeholder.component("pid", Component.text(handle.pid(), NamedTextColor.DARK_GREEN))
+                    Placeholder.unparsed("proc", name),
+                    Placeholder.unparsed("pid", String.valueOf(handle.pid()))
                 );
             });
         }

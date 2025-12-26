@@ -5,13 +5,9 @@ import org.quartz.*;
 import org.quartz.impl.StdSchedulerFactory;
 import org.winlogon.servermanager.ServerManagerPlugin;
 import org.winlogon.servermanager.config.CronConfig;
-import org.winlogon.servermanager.ExceptionWrappers;
-
-import com.google.common.base.Preconditions;
-// import com.google.common.base.Verify;
-
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class CronJobManager {
@@ -19,16 +15,13 @@ public class CronJobManager {
     private final Logger logger;
     private Scheduler scheduler;
 
-    public CronJobManager(ServerManagerPlugin plugin) {
+    public CronJobManager(ServerManagerPlugin plugin) throws SchedulerException {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
-        try {
-            Properties props = new Properties();
-            props.put("org.quartz.threadPool.threadCount", "1"); // Set thread count to 1
-            this.scheduler = new StdSchedulerFactory(props).getScheduler();
-        } catch (SchedulerException e) {
-            logger.severe("Failed to initialize scheduler: " + e.getMessage());
-        }
+        var props = new Properties();
+        // Set thread count to 1
+        props.put("org.quartz.threadPool.threadCount", "1");
+        this.scheduler = new StdSchedulerFactory(props).getScheduler();
     }
 
     public void startScheduler() {
@@ -36,19 +29,22 @@ public class CronJobManager {
             return;
         }
 
-        // Verify.verifyNotNull(scheduler);
-        Preconditions.checkState(
-            !ExceptionWrappers.safe(() -> scheduler.isStarted()),
-            "Scheduler is already started"
-        );
+        try {
+            if (scheduler.isStarted()) {
+                throw new IllegalStateException("Scheduler is already started");
+            }
+        } catch (SchedulerException e) {
+            logger.log(Level.SEVERE, "Failed to check scheduler status: " + e.getMessage());
+            return;
+        }
 
         try {
             scheduler.start();
         } catch (SchedulerException e) {
-            logger.severe("Failed to start scheduler: " + e.getMessage());
+            logger.log(Level.SEVERE, "Failed to start scheduler: " + e.getMessage());
         }
 
-        logger.info("Cron scheduler started.");
+        logger.log(Level.INFO, "Cron scheduler started.");
     }
 
     public void shutdownScheduler() {
@@ -62,9 +58,9 @@ public class CronJobManager {
             }
             // Wait for jobs to complete
             scheduler.shutdown(true);
-            logger.info("Cron scheduler shut down.");
+            logger.log(Level.INFO, "Cron scheduler shut down.");
         } catch (SchedulerException e) {
-            logger.severe("Failed to shut down scheduler: " + e.getMessage());
+            logger.log(Level.SEVERE, "Failed to shut down scheduler: " + e.getMessage());
         }
     }
 
@@ -95,12 +91,12 @@ public class CronJobManager {
                     .build();
 
                 scheduler.scheduleJob(job, trigger);
-                logger.info("Scheduled cron job: " + config.command + " with expression: " + config.expression);
+                logger.log(Level.INFO, "Scheduled cron job: " + config.command + " with expression: " + config.expression);
             }
         } catch (SchedulerException e) {
-            logger.severe("Failed to schedule cron jobs: " + e.getMessage());
+            logger.log(Level.SEVERE, "Failed to schedule cron jobs: " + e.getMessage());
         } catch (RuntimeException e) {
-            logger.severe("Invalid cron expression: " + e.getMessage());
+            logger.log(Level.SEVERE, "Invalid cron expression: " + e.getMessage());
         }
     }
 
@@ -114,6 +110,7 @@ public class CronJobManager {
             plugin.getLogger().info("Executing cron command: " + command);
 
             // Execute the command on the main thread to interact with Bukkit API safely
+            // TODO: make this Folia-compatible
             Bukkit.getScheduler().runTask(plugin, () -> {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             });

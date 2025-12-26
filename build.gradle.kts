@@ -3,7 +3,7 @@ import java.util.Date
 import java.util.TimeZone
 
 plugins {
-    id("com.gradleup.shadow") version "9.2.2"
+    id("com.gradleup.shadow") version "9.3.0"
     java
 }
 
@@ -39,8 +39,7 @@ val minecraftPatch = rootProject.extra["minecraftPatch"] as String
 val projectDescription = rootProject.extra["projectDescription"] as String
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
 }
 
 repositories {
@@ -49,10 +48,6 @@ repositories {
     maven {
         name = "papermc"
         url = uri("https://repo.papermc.io/repository/maven-public/")
-        content {
-            includeModule("io.papermc.paper", "paper-api")
-            includeModule("net.md-5", "bungeecord-chat")
-        }
     }
 
     maven {
@@ -65,22 +60,26 @@ repositories {
 
     maven("https://repo.codemc.org/repository/maven-public/")
     maven("https://jitpack.io")
-    maven("https://repo.papermc.io/repository/maven-snapshots/")
-    maven("https://artifactory.papermc.io/artifactory/universe/")
+    // maven("https://repo.papermc.io/repository/maven-snapshots/")
+    // maven("https://artifactory.papermc.io/artifactory/universe/")
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
 
     compileOnly("com.github.walker84837:JResult:1.4.0")
     compileOnly("de.exlll:configlib-paper:4.6.3")
     compileOnly("com.github.oshi:oshi-core:6.4.0")
     compileOnly("org.quartz-scheduler:quartz:2.3.2")
+    compileOnly("org.projectlombok:lombok:1.18.42")
+    annotationProcessor("org.projectlombok:lombok:1.18.42")
 
-    testImplementation("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
+    testCompileOnly("org.projectlombok:lombok:1.18.42")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.42")
+    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("net.kyori:adventure-api:4.25.0")
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.0")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.1")
 }
 
 tasks.test {
@@ -101,8 +100,6 @@ tasks.processResources {
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveClassifier.set("")
-    // relocate("org.quartz", "org.winlogon.servermanager.lib.quartz")
-    // relocate("com.github.walker84837", "org.winlogon.servermanager.gh")
     minimize()
 }
 

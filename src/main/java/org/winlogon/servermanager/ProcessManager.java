@@ -1,35 +1,44 @@
 package org.winlogon.servermanager;
 
+import com.github.walker84837.JResult.Result;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
-
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.winlogon.servermanager.config.ServerManagerConfig;
 import org.winlogon.servermanager.config.ServiceConfig;
-
 import oshi.SystemInfo;
 import oshi.software.os.OSProcess;
 import oshi.software.os.OperatingSystem;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class ProcessManager {
     private final ServerManagerPlugin plugin;
     private final Logger logger;
     private final ServerManagerConfig mainConfig;
     private final Map<String, ServiceConfig> serviceConfigs;
-    private final Map<String, ProcessHandle> runningProcesses = new HashMap<>();
+    private final Map<String, ProcessHandle> runningProcesses = new ConcurrentHashMap<>();
     private final ScheduledExecutorService monitorExecutor;
     private final ExecutorService processesExecutor;
-    private final Map<String, CompletableFuture<Void>> processFutures = new HashMap<>();
+    private final Map<String, CompletableFuture<Void>> processFutures = new ConcurrentHashMap<>();
     private final SystemInfo systemInfo = new SystemInfo();
     private final OperatingSystem os = systemInfo.getOperatingSystem();
 
@@ -51,33 +60,40 @@ public class ProcessManager {
     }
 
     public void startProcess(String programName, CommandSender sender) {
-        if (runningProcesses.containsKey(programName)) {
-            sendErrorMessage(sender, "Program <program> is already running!", programName);
-            return;
-        }
+        Result.<String, String>ok(programName)
+          .andThen(this::isProcessNotRunning)
+          .andThen(this::getServiceConfig)
+          .match(
+              config -> processesExecutor.submit(() -> startProcessInternal(programName, config, sender)),
+              error -> sendErrorMessage(sender, error, programName)
+          );
+    }
 
-        var config = serviceConfigs.get(programName);
-        if (config == null) {
-            sendErrorMessage(sender, "Unknown program: <program>", programName);
-            return;
-        }
+    private Result<String, String> isProcessNotRunning(String programName) {
+        return runningProcesses.containsKey(programName)
+            ? Result.err("Program <program> is already running!")
+            : Result.ok(programName);
+    }
 
-        processesExecutor.submit(() -> startProcessInternal(programName, config, sender));
+    private Result<ServiceConfig, String> getServiceConfig(String programName) {
+        return Optional.ofNullable(serviceConfigs.get(programName))
+            .map(Result::<ServiceConfig, String>ok)
+            .orElse(Result.err("Unknown program: <program>"));
     }
 
     private void startProcessInternal(String programName, ServiceConfig config, CommandSender sender) {
         try {
             executePreLaunchCommands(programName, config);
-            
+
             Process process = createAndStartProcess(config);
             ProcessHandle handle = process.toHandle();
-            
+
             runningProcesses.put(programName, handle);
             scheduleDurationBasedKill(programName, config, handle, sender);
             setupProcessCompletionHandler(programName, config, process, sender);
-            
+
             sendSuccessMessage(sender, "Started program '" + programName + "' with PID: " + handle.pid());
-            
+
         } catch (IOException e) {
             handleStartupFailure(programName, sender, e, "Failed to start program");
         } catch (InterruptedException e) {
@@ -91,14 +107,13 @@ public class ProcessManager {
     private void executePreLaunchCommands(String programName, ServiceConfig config) throws IOException, InterruptedException {
         for (var cmd : config.preLaunchCommands) {
             logger.info("Executing pre-launch command for " + programName + ": " + cmd);
-            Process preLaunchProcess = Runtime.getRuntime().exec(cmd);
-            preLaunchProcess.waitFor();
+            new ProcessBuilder(cmd.split(" ")).start().waitFor();
         }
     }
 
     private Process createAndStartProcess(ServiceConfig config) throws IOException {
         var processBuilder = new ProcessBuilder();
-        
+
         List<String> commandArgs = new ArrayList<>();
         commandArgs.add(config.program);
         commandArgs.addAll(config.args);
@@ -118,6 +133,8 @@ public class ProcessManager {
         monitorExecutor.schedule(() -> {
             if (handle.isAlive()) {
                 logger.info("Program " + programName + " reached its duration limit. Sending " + config.killSignal);
+                // TODO: actually find a way to send a custom signal to a process, but this seems tricky because normal Java APIs won't let you
+                // See: https://stackoverflow.com/questions/191215/how-to-stop-java-process-gracefully
                 handle.destroy();
                 sendWarningMessage(sender, "Program <program> reached its duration limit and was terminated.", programName);
             }
@@ -128,11 +145,11 @@ public class ProcessManager {
         CompletableFuture<Void> future = process.onExit().thenAccept(p -> {
             runningProcesses.remove(programName);
             processFutures.remove(programName);
-            
+
             executeAfterDeathCommands(programName, config);
             handleAutoRestart(programName, config, sender);
         });
-        
+
         processFutures.put(programName, future);
     }
 
@@ -140,8 +157,7 @@ public class ProcessManager {
         for (String cmd : config.afterDeathCommands) {
             logger.info("Executing after-death command for " + programName + ": " + cmd);
             try {
-                Process afterDeathProcess = Runtime.getRuntime().exec(cmd);
-                afterDeathProcess.waitFor();
+                new ProcessBuilder(cmd.split(" ")).start().waitFor();
             } catch (IOException | InterruptedException e) {
                 logger.severe("Error executing after-death command for " + programName + ": " + e.getMessage());
                 if (e instanceof InterruptedException) {
@@ -155,92 +171,68 @@ public class ProcessManager {
         if (!config.autoRestart) return;
 
         logger.info("Auto-restarting program: " + programName);
+        plugin.getSLF4JLogger().warn("Auto-restarting program: {}", programName);
         Bukkit.getScheduler().runTask(plugin, () -> {
-            sendWarningMessage(sender, "Auto-restarting program: <gold>" + programName + "</gold>", programName);
+            sendWarningMessage(sender, "Auto-restarting program: <gold><program></gold>", programName);
         });
-        
-        processesExecutor.submit(() -> {
-            try {
-                Thread.sleep(5000);
-                startProcess(programName, sender);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
+
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> startProcess(programName, sender), 5 * 20);
     }
 
     public void stopProcess(String programName, CommandSender sender) {
-        var handle = runningProcesses.get(programName);
-        if (handle == null) {
-            sendErrorMessage(sender, "Program '" + programName + "' is not running!", programName);
-            return;
-        }
-
-        var config = serviceConfigs.get(programName);
-        if (config == null) {
-            sendErrorMessage(sender, "Program '" + programName + "' is not configured!", programName);
-            return;
-        }
-
-        processesExecutor.submit(() -> stopProcessInternal(programName, handle, sender));
+        Optional.ofNullable(runningProcesses.get(programName))
+            .ifPresentOrElse(
+                handle -> processesExecutor.submit(() -> stopProcessInternal(programName, handle, sender)),
+                () -> sendErrorMessage(sender, "Program '<program>' is not running!", programName)
+            );
     }
 
     private void stopProcessInternal(String programName, ProcessHandle handle, CommandSender sender) {
         try {
             handle.destroy();
-            
+
             CompletableFuture<Void> future = processFutures.get(programName);
             if (future != null) {
                 future.orTimeout(10, TimeUnit.SECONDS).join();
             }
 
             sendSuccessMessage(sender, "Stopped program '" + programName + "'");
-            
         } catch (Exception e) {
             handleStopFailure(programName, sender, e);
         }
     }
 
     public void listProcesses(CommandSourceStack source) {
-        Component message = buildProcessListMessage();
-        source.getSender().sendMessage(message);
-    }
+        var runningProcessEntries = runningProcesses.entrySet().stream()
+            .map(entry -> "  - <green>" + entry.getKey() + " (PID: " + entry.getValue().pid() + ")</green>")
+            .collect(Collectors.joining("\n"));
 
-    private Component buildProcessListMessage() {
-        var builder = Component.text();
-        
-        builder.append(Component.text("=== Running Processes ", NamedTextColor.GOLD));
-        
-        if (runningProcesses.isEmpty()) {
-            builder.append(Component.text("No processes running", NamedTextColor.GRAY));
-        } else {
-            runningProcesses.forEach((name, handle) -> 
-                builder.append(Component.text("- " + name + " (PID: " + handle.pid() + ")\n", NamedTextColor.GREEN))
-            );
-        }
+        var availablePrograms = serviceConfigs.keySet().stream()
+            .map(programName -> {
+                boolean isRunning = runningProcesses.containsKey(programName);
+                String status = isRunning ? "<green>[RUNNING]</green>" : "<red>[STOPPED]</red>";
+                return "  - " + programName + status;
+            })
+            .collect(Collectors.joining("\n"));
 
-        builder.append(Component.text("\n=== Available Programs ===", NamedTextColor.GOLD));
+        String message = """
+            <gold>=== Running Processes ===</gold>
+            <gray><running_processes></gray>
 
-        serviceConfigs.keySet().forEach(programName -> {
-            boolean isRunning = runningProcesses.containsKey(programName);
-            var status = isRunning ? " [RUNNING]" : " [STOPPED]";
-            var color = isRunning ? NamedTextColor.GREEN : NamedTextColor.RED;
-            
-            builder.append(Component.text("\n- " + programName + status, color));
-        });
+            <gold>=== Available Programs ===</gold>
+            <available_programs>
+            """;
 
-        return builder.build();
+        source.getSender().sendRichMessage(message,
+            Placeholder.unparsed("running_processes", runningProcesses.isEmpty() ? "  No processes running" : runningProcessEntries),
+            Placeholder.unparsed("available_programs", availablePrograms)
+        );
     }
 
     public void stopAllProcesses() {
-        runningProcesses.forEach((programName, handle) -> {
-            if (handle != null) {
-                handle.destroy();
-            }
-        });
-        
+        runningProcesses.values().forEach(ProcessHandle::destroy);
         runningProcesses.clear();
-        
+
         processFutures.values().forEach(future -> future.cancel(true));
         processFutures.clear();
     }
@@ -252,25 +244,23 @@ public class ProcessManager {
         if (totalMemoryLimitBytes <= 0) return;
 
         MemoryUsageSnapshot snapshot = captureMemoryUsage();
-        
+
         if (snapshot.totalMemoryUsage > totalMemoryLimitBytes) {
             killMemoryHeavyProcess(snapshot);
         }
     }
 
     private MemoryUsageSnapshot captureMemoryUsage() {
-        long currentTotalMemoryUsage = 0;
         Map<String, OSProcess> osProcesses = new HashMap<>();
+        long currentTotalMemoryUsage = 0;
 
         for (Map.Entry<String, ProcessHandle> entry : runningProcesses.entrySet()) {
-            String programName = entry.getKey();
-            ProcessHandle handle = entry.getValue();
-            
-            Optional.ofNullable(os.getProcess((int) handle.pid())).ifPresent(osProcess -> {
-                osProcesses.put(programName, osProcess);
+            os.getProcess((int) entry.getValue().pid());
+            Optional.ofNullable(os.getProcess((int) entry.getValue().pid())).ifPresent(osProcess -> {
+                osProcesses.put(entry.getKey(), osProcess);
             });
         }
-
+        
         currentTotalMemoryUsage = osProcesses.values().stream()
             .mapToLong(OSProcess::getResidentSetSize)
             .sum();
@@ -279,8 +269,8 @@ public class ProcessManager {
     }
 
     private void killMemoryHeavyProcess(MemoryUsageSnapshot snapshot) {
-        logger.warning("Total memory usage (" + 
-            (snapshot.totalMemoryUsage / (1024 * 1024)) + " MB) exceeds limit (" + 
+        logger.warning("Total memory usage (" +
+            (snapshot.totalMemoryUsage / (1024 * 1024)) + " MB) exceeds limit (" +
             mainConfig.totalMemoryLimitMB + " MB). Initiating OOM kill.");
 
         Optional<Map.Entry<String, OSProcess>> victim = snapshot.osProcesses.entrySet().stream()
@@ -293,16 +283,15 @@ public class ProcessManager {
     }
 
     private void killProcess(String programName, OSProcess process) {
-        ProcessHandle victimHandle = runningProcesses.get(programName);
-        if (victimHandle != null) {
-            logger.severe("OOM Killer: Killing process " + programName + 
+        Optional.ofNullable(runningProcesses.get(programName)).ifPresent(victimHandle -> {
+            logger.severe("OOM Killer: Killing process " + programName +
                 " (PID: " + victimHandle.pid() + ") due to excessive memory usage.");
             victimHandle.destroyForcibly();
-            
+
             Bukkit.getScheduler().runTask(plugin, () -> {
                 logger.info("OOM Killer: Killed process " + programName + ".");
             });
-        }
+        });
     }
 
     private long calculateOOMBadness(OSProcess process) {
@@ -312,11 +301,8 @@ public class ProcessManager {
     public void startProcessMonitoring() {
         monitorExecutor.scheduleAtFixedRate(() -> {
             runningProcesses.entrySet().removeIf(entry -> {
-                var programName = entry.getKey();
-                var handle = entry.getValue();
-
-                if (!handle.isAlive()) {
-                    handleUnexpectedTermination(programName);
+                if (!entry.getValue().isAlive()) {
+                    handleUnexpectedTermination(entry.getKey());
                     return true;
                 }
                 return false;
@@ -326,22 +312,21 @@ public class ProcessManager {
 
     private void handleUnexpectedTermination(String programName) {
         logger.warning("Process '" + programName + "' terminated unexpectedly");
-        var config = serviceConfigs.get(programName);
-        if (config != null && config.autoRestart) {
-            logger.info("Program '" + programName + "' terminated unexpectedly. Auto-restart will be attempted.");
-        }
+        Optional.ofNullable(serviceConfigs.get(programName))
+            .filter(config -> config.autoRestart)
+            .ifPresent(config -> logger.info("Program '" + programName + "' terminated unexpectedly. Auto-restart will be attempted."));
     }
 
     // Helper methods for consistent messaging
     private void sendErrorMessage(CommandSender sender, String message, String programName) {
         sender.sendRichMessage("<red>" + message + "</red>",
-            Placeholder.component("program", Component.text(programName, NamedTextColor.DARK_RED))
+            Placeholder.unparsed("program", programName)
         );
     }
 
     private void sendWarningMessage(CommandSender sender, String message, String programName) {
         sender.sendRichMessage("<yellow>" + message + "</yellow>",
-            Placeholder.component("program", Component.text(programName, NamedTextColor.GOLD))
+            Placeholder.unparsed("program", programName)
         );
     }
 
@@ -350,15 +335,18 @@ public class ProcessManager {
     }
 
     private void handleStartupFailure(String programName, CommandSender sender, Exception e, String context) {
-        sender.sendRichMessage("<red>" + context + " '" + programName + "': " + e.getMessage() + "</red>");
+        sender.sendRichMessage(
+            "<red>" + context + " '<program>': " + e.getMessage() + "</red>",
+            Placeholder.unparsed("program", programName)
+        );
         logger.severe(context + " '" + programName + "': " + e.getMessage());
     }
 
     private void handleStopFailure(String programName, CommandSender sender, Exception e) {
         sender.sendRichMessage(
-            "<red>Failed to stop program <program_name>: <exception></red>",
-            Placeholder.component("program_name", Component.text(programName, NamedTextColor.DARK_RED)),
-            Placeholder.component("exception", Component.text(e.getMessage(), NamedTextColor.DARK_RED))
+            "<red>Failed to stop program <program>: <exception></red>",
+            Placeholder.unparsed("program", programName),
+            Placeholder.unparsed("exception", e.getMessage())
         );
         logger.severe("Failed to stop program '" + programName + "': " + e.getMessage());
     }

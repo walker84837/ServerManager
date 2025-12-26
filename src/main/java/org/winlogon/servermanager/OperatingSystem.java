@@ -4,15 +4,29 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class OperatingSystem {
+
+    private static Logger logger = Logger.getLogger(OperatingSystem.class.getName());
+
+    /**
+     * Call this once from your JavaPlugin's onEnable().
+     */
+    public static void init(Logger pluginLogger) {
+        logger = pluginLogger;
+    }
+
     public interface PackageManager {
         String getInstallCommand(String packageName);
     }
@@ -40,28 +54,25 @@ public class OperatingSystem {
                 ARCH, List.of("arch")
             );
 
+            var osRelease = Path.of("/etc/os-release");
+            String content;
+
             try {
-                var process = new ProcessBuilder("cat", "/etc/os-release").start();
-                var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-
-                // read and process content
-                var content = reader.lines()
-                        .map(String::toLowerCase)
-                        .collect(Collectors.joining("\n"));
-
-                reader.close(); // close stream manually
-
-                // return distro based on content and possible values in osMap
-                return osMap.entrySet().stream()
-                        .filter(e -> e.getValue().stream().anyMatch(content::contains))
-                        .map(Map.Entry::getKey)
-                        .findFirst()
-                        .orElse(UNKNOWN);
-
+                if (!Files.exists(osRelease)) {
+                    logger.fine("/etc/os-release not found");
+                    return UNKNOWN;
+                }
+                content = Files.readString(osRelease, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.log(Level.WARNING, "Failed to read /etc/os-release", e);
                 return UNKNOWN;
             }
+
+            return osMap.entrySet().stream()
+                    .filter(e -> e.getValue().stream().anyMatch(content::contains))
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .orElse(UNKNOWN);
         }
     }
 
@@ -72,76 +83,88 @@ public class OperatingSystem {
         UNKNOWN;
 
         public static Type detect() {
-            String osName = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+            String osName = System.getProperty("os.name", "unknown").toLowerCase(Locale.ROOT);
             if (osName.contains("win")) return WINDOWS;
-            if (osName.contains("mac")) return MACOS;
+            if (osName.contains("mac") || osName.contains("darwin")) return MACOS;
             if (osName.contains("nux") || osName.contains("nix")) return LINUX;
             return UNKNOWN;
         }
     }
 
     public static Optional<String> buildInstallCommand(String packageName) {
-        var os = OperatingSystem.Type.detect();
-
-        switch (os) {
-            case LINUX -> {
-                var distro = LinuxDistro.detect();
-                return Optional.of(distro.getPackageManager().getInstallCommand(packageName));
-            }
-            case WINDOWS -> {
-                if (!isOnPath("choco")) {
-                    return Optional.empty();
-                }
-                return Optional.of("choco install " + packageName + " -y");
-            }
-            case MACOS -> {
-                if (!isOnPath("brew")) return Optional.empty();
-                return Optional.of("brew install " + packageName);
-            }
-            default -> {
-                return Optional.empty();
-            }
-        }
+        return switch (Type.detect()) {
+            case LINUX -> Optional.of(
+                    LinuxDistro.detect()
+                            .getPackageManager()
+                            .getInstallCommand(packageName)
+            );
+            case WINDOWS -> isOnPath("choco")
+                    ? Optional.of("choco install " + packageName + " -y")
+                    : Optional.empty();
+            case MACOS -> isOnPath("brew")
+                    ? Optional.of("brew install " + packageName)
+                    : Optional.empty();
+            default -> Optional.empty();
+        };
     }
 
-    // TODO: get rid of System.out.println: not recommended with Minecraft plugins
     public static void runCommand(String command) {
-        try {
-            // TODO: should this be `bash` or `sh`?
-            var args = Type.detect() == Type.WINDOWS
+        String[] args = Type.detect() == Type.WINDOWS
                 ? new String[] { "cmd", "/c", command }
-                : new String[] { "bash", "-c", command };
+                : new String[] { "/bin/sh", "-c", command };
 
-            var builder = new ProcessBuilder(args);
-            builder.redirectErrorStream(true);
+        ProcessBuilder builder = new ProcessBuilder(args);
+        builder.redirectErrorStream(true);
 
-            var process = builder.start();
+        try {
+            logger.fine(() -> "Executing command: " + command);
+            Process process = builder.start();
 
-            try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                reader.lines().forEach(System.out::println);
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                reader.lines().forEach(line -> logger.info(line));
             }
 
             int exitCode = process.waitFor();
-            System.out.println("Command exited with code: " + exitCode);
-        } catch (Exception e) {
-            e.printStackTrace();
+            logger.info("Command exited with code " + exitCode);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.log(Level.WARNING, "Command execution interrupted", e);
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Failed to execute command", e);
         }
     }
 
     public static boolean isOnPath(String name) {
-        var path = System.getenv("PATH");
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null || pathEnv.isBlank()) {
+            return false;
+        }
 
-        if (path == null || path.isEmpty()) return false;
         boolean isWindows = Type.detect() == Type.WINDOWS;
+        List<String> dirs = Arrays.stream(pathEnv.split(File.pathSeparator))
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.toList());
 
-        List<String> dirs = Arrays.asList(path.split(File.pathSeparator));
-        List<String> exts = isWindows ? Arrays.asList(".exe", ".bat", ".cmd", ".com", "") : List.of("", ".app");
+        List<String> exts;
+        if (isWindows) {
+            String pathext = System.getenv("PATHEXT");
+            exts = pathext != null
+                    ? Arrays.stream(pathext.split(";"))
+                            .map(String::toLowerCase)
+                            .toList()
+                    : List.of(".exe", ".bat", ".cmd", ".com", "");
+        } else {
+            exts = List.of("");
+        }
 
         for (var dir : dirs) {
             for (var ext : exts) {
-                var p = Path.of(dir, name + ext);
-                var f = p.toFile();
-                if (f.isFile() && (isWindows || f.canExecute())) return true;
+                var candidate = Path.of(dir, name + ext);
+                if (Files.isRegularFile(candidate) && (isWindows || Files.isExecutable(candidate))) {
+                    return true;
+                }
             }
         }
         return false;
