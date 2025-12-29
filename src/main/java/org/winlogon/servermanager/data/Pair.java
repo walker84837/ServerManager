@@ -1,4 +1,4 @@
-package org.winlogon.servermanager.util;
+package org.winlogon.servermanager.data;
 
 import java.util.Iterator;
 import java.util.List;
