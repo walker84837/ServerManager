@@ -13,6 +13,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
+import org.winlogon.servermanager.CommandExecutor;
 import org.winlogon.servermanager.OperatingSystem;
 import org.winlogon.servermanager.ServerManagerPlugin;
 
@@ -30,7 +31,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
-public class SystemCommand {
+public class SystemCommand implements CommandExecutor {
     private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
     private final SystemInfo systemInfo = new SystemInfo();
@@ -43,6 +44,16 @@ public class SystemCommand {
         "Allows execution of system management commands",
         PermissionDefault.OP
     );
+
+    @Override
+    public Permission permission() {
+        return perm;
+    }
+
+    @Override
+    public String permissionNode() {
+        return permissionNode;
+    }
 
     public SystemCommand(ServerManagerPlugin plugin) {
         this.plugin = plugin;

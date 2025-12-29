@@ -13,6 +13,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
+import org.winlogon.servermanager.CommandExecutor;
 import org.winlogon.servermanager.ServerManagerPlugin;
 
 import java.io.BufferedReader;
@@ -25,7 +26,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-public class TerminalCommand {
+public class TerminalCommand implements CommandExecutor {
     private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
     private final Logger logger;
@@ -33,9 +34,19 @@ public class TerminalCommand {
     private final String permissionNode = "servermanager.command.terminal";
     private final Permission perm = new Permission(
         permissionNode,
-         "Allows execution of terminal commands",
-         PermissionDefault.OP
+        "Allows execution of terminal commands",
+        PermissionDefault.OP
     );
+
+    @Override
+    public Permission permission() {
+        return perm;
+    }
+
+    @Override
+    public String permissionNode() {
+        return permissionNode;
+    }
 
     public TerminalCommand(ServerManagerPlugin plugin) {
         this.plugin = plugin;
