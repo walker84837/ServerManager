@@ -1,6 +1,5 @@
 package org.winlogon.servermanager.platform;
 
-import org.bukkit.plugin.Plugin;
 import org.winlogon.servermanager.ServerManagerPlugin;
 
 public class SchedulerAdapter {

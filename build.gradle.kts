@@ -58,11 +58,12 @@ repositories {
         }
     }
 
+    maven("https://maven.winlogon.org/releases")
     maven("https://repo.codemc.org/repository/maven-public/")
     maven("https://jitpack.io")
-    // maven("https://repo.papermc.io/repository/maven-snapshots/")
-    // maven("https://artifactory.papermc.io/artifactory/universe/")
 }
+
+val lombokVersion = "1.18.42"
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
@@ -71,10 +72,10 @@ dependencies {
     compileOnly("de.exlll:configlib-paper:4.6.3")
     compileOnly("com.github.oshi:oshi-core:6.4.0")
     compileOnly("org.quartz-scheduler:quartz:2.3.2")
-    compileOnly("org.projectlombok:lombok:1.18.42")
-    annotationProcessor("org.projectlombok:lombok:1.18.42")
+    compileOnly("org.projectlombok:lombok:${lombokVersion}")
+    annotationProcessor("org.projectlombok:lombok:${lombokVersion}")
 
-    testCompileOnly("org.projectlombok:lombok:1.18.42")
+    testCompileOnly("org.projectlombok:lombok:${lombokVersion}")
     testAnnotationProcessor("org.projectlombok:lombok:1.18.42")
     testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("net.kyori:adventure-api:4.25.0")
