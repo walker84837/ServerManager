@@ -18,6 +18,9 @@ public class CommandRegistrar {
         this.plugin = plugin;
         this.terminalCommand = new TerminalCommand(plugin);
         this.systemCommand = new SystemCommand(plugin);
+
+        terminalCommand.registerIfNotExists(plugin);
+        systemCommand.registerIfNotExists(plugin);
     }
 
     public void registerCommands() {

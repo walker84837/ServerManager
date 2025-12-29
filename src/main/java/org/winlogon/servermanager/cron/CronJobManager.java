@@ -110,8 +110,7 @@ public class CronJobManager {
             plugin.getLogger().info("Executing cron command: " + command);
 
             // Execute the command on the main thread to interact with Bukkit API safely
-            // TODO: make this Folia-compatible
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            plugin.getSchedulerAdapter().runNow(() -> {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             });
         }

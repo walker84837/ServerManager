@@ -8,7 +8,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 
-public interface CommandExecutor {
+public interface PluginCommand {
     LiteralArgumentBuilder<CommandSourceStack> createCommand();
 
     Permission permission();

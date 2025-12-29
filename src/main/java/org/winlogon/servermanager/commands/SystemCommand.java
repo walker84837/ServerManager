@@ -13,7 +13,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
-import org.winlogon.servermanager.CommandExecutor;
+import org.winlogon.servermanager.PluginCommand;
 import org.winlogon.servermanager.OperatingSystem;
 import org.winlogon.servermanager.ServerManagerPlugin;
 
@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
-public class SystemCommand implements CommandExecutor {
+public class SystemCommand implements PluginCommand {
     private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
     private final SystemInfo systemInfo = new SystemInfo();
@@ -99,50 +99,23 @@ public class SystemCommand implements CommandExecutor {
         );
 
         CompletableFuture.runAsync(() -> {
+            var installCommand = OperatingSystem.buildInstallCommand(packageName);
+
+            if (installCommand.isEmpty()) {
+                sender.sendRichMessage("<red>Package installation not supported on this OS.</red>");
+                return;
+            }
+
             try {
-                var osType = OperatingSystem.Type.detect();
-                List<String> installCommand = new ArrayList<>();
+                Process process = new ProcessBuilder(installCommand.get().split(" ")).redirectErrorStream(true).start();
 
-                // TODO: use OperatingSystem class to detect package install command
-                if (osType == OperatingSystem.Type.WINDOWS) {
-                    installCommand.add("choco");
-                    sender.sendRichMessage("<red>Package installation not supported on Windows.</red>");
-                    return;
-                }
-
-                if (osType == OperatingSystem.Type.LINUX) {
-                    var osFamily = OperatingSystem.LinuxDistro.detect();
-                    installCommand.add("sudo");
-
-                    List<String> command = switch (osFamily) {
-                        case DEBIAN:
-                            yield Arrays.asList("apt-get", "install", "-y", packageName);
-                        case ARCH:
-                            yield Arrays.asList("pacman", "-S", "--noconfirm", packageName);
-                        case FEDORA:
-                            yield Arrays.asList("dnf", "install", "-y", packageName);
-                        default:
-                            yield Arrays.asList("echo", "Unsupported distro");
-                    };
-
-                    installCommand.addAll(command);
-                } else {
-                    sender.sendRichMessage("<red>Unsupported OS for package installation</red>");
-                    return;
-                }
-
-                Process process = new ProcessBuilder(installCommand).redirectErrorStream(true).start();
-
-                var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                var output = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+                String output;
+                try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    output = com.google.common.io.CharStreams.toString(reader);
                 }
 
                 int exitCode = process.waitFor();
 
-                // TODO: This looks not so great, and should be refactored to something better, but it works!
                 if (exitCode == 0) {
                     sender.sendRichMessage(
                         "<green>Package '<name>' installed successfully. Output:</green>",
@@ -150,21 +123,16 @@ public class SystemCommand implements CommandExecutor {
                     );
                     sender.sendRichMessage(
                         "<white><out></white>",
-                        Placeholder.unparsed("out", output.toString())
+                        Placeholder.unparsed("out", output)
                     );
                 } else {
-                    var errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-                    var errorOutput = new StringBuilder();
-                    while ((line = errorReader.readLine()) != null) {
-                        errorOutput.append(line).append("\n");
-                    }
                     sender.sendRichMessage(
                         "<red>Package installation failed with exit code <exit-code>. Error:</red>",
                         Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
                         "<red><err></red>",
-                        Placeholder.unparsed("err", errorOutput.toString())
+                        Placeholder.unparsed("err", output)
                     );
                 }
 
