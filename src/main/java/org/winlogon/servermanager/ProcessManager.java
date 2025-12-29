@@ -1,11 +1,13 @@
 package org.winlogon.servermanager;
 
 import com.github.walker84837.JResult.Result;
+
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.winlogon.servermanager.config.ServerManagerConfig;
@@ -133,12 +135,30 @@ public class ProcessManager {
         monitorExecutor.schedule(() -> {
             if (handle.isAlive()) {
                 logger.info("Program " + programName + " reached its duration limit. Sending " + config.killSignal);
-                // TODO: actually find a way to send a custom signal to a process, but this seems tricky because normal Java APIs won't let you
-                // See: https://stackoverflow.com/questions/191215/how-to-stop-java-process-gracefully
-                handle.destroy();
+                sendKillSignal(handle, config.killSignal);
                 sendWarningMessage(sender, "Program <program> reached its duration limit and was terminated.", programName);
             }
         }, config.duration, config.durationUnit);
+    }
+
+    private void sendKillSignal(ProcessHandle handle, String signal) {
+        var osType = org.winlogon.servermanager.OperatingSystem.Type.detect();
+        try {
+            if (osType == org.winlogon.servermanager.OperatingSystem.Type.LINUX || osType == org.winlogon.servermanager.OperatingSystem.Type.MACOS) {
+                new ProcessBuilder("kill", "-" + signal, String.valueOf(handle.pid())).start().waitFor();
+            } else if (osType == org.winlogon.servermanager.OperatingSystem.Type.WINDOWS) {
+                new ProcessBuilder("taskkill", "/PID", String.valueOf(handle.pid()), "/F").start().waitFor();
+            } else {
+                handle.destroy();
+            }
+        } catch (IOException | InterruptedException e) {
+            logger.severe("Failed to send kill signal " + signal + " to process " + handle.pid() + ": " + e.getMessage());
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            // Fallback to destroy()
+            handle.destroy();
+        }
     }
 
     private void setupProcessCompletionHandler(String programName, ServiceConfig config, Process process, CommandSender sender) {

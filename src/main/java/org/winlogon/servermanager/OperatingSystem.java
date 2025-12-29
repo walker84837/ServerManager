@@ -17,11 +17,12 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class OperatingSystem {
-
     private static Logger logger = Logger.getLogger(OperatingSystem.class.getName());
 
     /**
-     * Call this once from your JavaPlugin's onEnable().
+     * Initializes the logger for the OperatingSystem class.
+     *
+     * @param pluginLogger The logger to be used for logging messages from the OperatingSystem class.
      */
     public static void init(Logger pluginLogger) {
         logger = pluginLogger;

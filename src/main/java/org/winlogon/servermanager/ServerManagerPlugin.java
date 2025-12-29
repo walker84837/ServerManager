@@ -4,9 +4,12 @@ import de.exlll.configlib.ConfigLib;
 import de.exlll.configlib.NameFormatters;
 import de.exlll.configlib.YamlConfigurationProperties;
 import de.exlll.configlib.YamlConfigurations;
+
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+
 import org.bukkit.plugin.java.JavaPlugin;
 import org.quartz.SchedulerException;
 import org.winlogon.servermanager.config.CronConfig;
@@ -14,6 +17,8 @@ import org.winlogon.servermanager.config.ServerManagerConfig;
 import org.winlogon.servermanager.config.ServiceConfig;
 import org.winlogon.servermanager.cron.CronJobManager;
 import org.winlogon.servermanager.discord.DiscordWebhookSender;
+import org.winlogon.servermanager.platform.SchedulerAdapter;
+
 import oshi.SystemInfo;
 
 import java.io.IOException;
@@ -45,6 +50,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
 
     private CommandRegistrar commandRegistrar;
     private ProcessManager processManager;
+    private SchedulerAdapter schedulerAdapter;
 
     @Override
     public void onLoad() {
@@ -64,6 +70,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
     public void onEnable() {
         this.processManager = new ProcessManager(this, mainConfig, serviceConfigs, monitorExecutor, processesExecutor);
         this.commandRegistrar = new CommandRegistrar(this);
+        this.schedulerAdapter = new SchedulerAdapter(this);
         try {
             this.cronJobManager = new CronJobManager(this);
         } catch (SchedulerException e) {
@@ -176,7 +183,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         }
 
         List<CronConfig> cronConfigs = new ArrayList<>();
-        try (Stream<Path> paths = Files.list(cronFolder)) {
+        try (var paths = Files.list(cronFolder)) {
             cronConfigs.addAll(paths
                 .filter(Files::isRegularFile)
                 .filter(p -> p.getFileName().toString().endsWith(".yml"))
@@ -203,6 +210,10 @@ public final class ServerManagerPlugin extends JavaPlugin {
         return processManager;
     }
 
+    public SchedulerAdapter getSchedulerAdapter() {
+        return schedulerAdapter;
+    }
+
     public void sendDiscordMessage(String message) {
         discordWebhookSender.ifPresentOrElse(sender -> sender.sendMessage(message), () -> getLogger().warning(message));
     }
@@ -217,11 +228,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         loadCronConfigs();
 
         if (mainConfig.cronJobsEnabled && cronJobManager != null) {
-            try {
-                cronJobManager.startScheduler();
-            } catch (SchedulerException e) {
-                getLogger().log(Level.SEVERE, "Failed to start cron scheduler on reload.", e);
-            }
+            cronJobManager.startScheduler();
         } else if (cronJobManager != null) {
             cronJobManager.shutdownScheduler();
         }
