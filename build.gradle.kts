@@ -3,7 +3,7 @@ import java.util.Date
 import java.util.TimeZone
 
 plugins {
-    id("com.gradleup.shadow") version "9.3.0"
+    alias(libs.plugins.shadow)
     java
 }
 
@@ -63,24 +63,22 @@ repositories {
     maven("https://jitpack.io")
 }
 
-val lombokVersion = "1.18.42"
-
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly(libs.paper.api)
 
-    compileOnly("com.github.walker84837:JResult:1.4.0")
-    compileOnly("de.exlll:configlib-paper:4.6.3")
-    compileOnly("com.github.oshi:oshi-core:6.4.0")
-    compileOnly("org.quartz-scheduler:quartz:2.3.2")
-    compileOnly("org.projectlombok:lombok:${lombokVersion}")
-    annotationProcessor("org.projectlombok:lombok:${lombokVersion}")
+    compileOnly(libs.jresult)
+    compileOnly(libs.configlib.paper)
+    compileOnly(libs.oshi.core)
+    compileOnly(libs.quartz)
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
 
-    testCompileOnly("org.projectlombok:lombok:${lombokVersion}")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.42")
-    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
-    testImplementation("net.kyori:adventure-api:4.25.0")
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.1")
+    testCompileOnly(libs.lombok)
+    testAnnotationProcessor(libs.lombok)
+    testImplementation(libs.paper.api)
+    testImplementation(libs.adventure.api)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {
