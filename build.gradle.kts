@@ -1,6 +1,7 @@
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.TimeZone
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     alias(libs.plugins.shadow)
@@ -9,58 +10,53 @@ plugins {
 
 group = "org.winlogon.servermanager"
 
+extra["projectDescription"] = "A server management utility"
+extra["minecraftBase"] = "1.21.10"
 
-fun getTime(): String {
+val providers = project.providers
+
+val projectNameProvider = providers.provider { project.rootProject.name }
+val projectVersionProvider = providers.provider { project.version.toString() }
+val projectGroupProvider = providers.provider { project.group.toString() }
+val projectDescriptionExtraProvider = providers.provider { project.rootProject.extra["projectDescription"] as String }
+val minecraftBaseExtraProvider = providers.provider { project.rootProject.extra["minecraftBase"] as String }
+
+val timestampProvider = providers.provider {
     val sdf = SimpleDateFormat("yyyy-MM-dd'T'HHmmss'Z'").apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
-    return sdf.format(Date()).toString()
+    sdf.format(Date())
 }
 
-val shortVersion: String? = if (project.hasProperty("ver")) {
+val shortVersionProvider = providers.provider {
+    if (!project.hasProperty("ver")) {
+        return@provider null
+    }
+
     val ver: String = project.property("ver") as String
     if (ver.startsWith("v")) {
         ver.substring(1).uppercase()
     } else {
         ver.uppercase()
     }
-} else {
-    null
 }
 
-version = when {
-    shortVersion.isNullOrBlank() -> "${getTime()}-SNAPSHOT"
-    shortVersion.contains("-RC-") -> shortVersion.substringBefore("-RC-") + "-SNAPSHOT"
-    else -> shortVersion
-}
+version = shortVersionProvider.flatMap { shortVer ->
+    if (shortVer.isNullOrBlank()) {
+        return@flatMap timestampProvider.map { timestamp -> "$timestamp-SNAPSHOT" }
+    }
 
-val minecraftBase = rootProject.extra["minecraftBase"] as String
-val minecraftPatch = rootProject.extra["minecraftPatch"] as String
-val projectDescription = rootProject.extra["projectDescription"] as String
+    project.providers.provider {
+        if (shortVer.contains("-RC-")) {
+            shortVer.substringBefore("-RC-") + "-SNAPSHOT"
+        } else {
+            shortVer
+        }
+    }
+}
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
-}
-
-repositories {
-    mavenCentral()
-
-    maven {
-        name = "papermc"
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
-
-    maven {
-        name = "minecraft"
-        url = uri("https://libraries.minecraft.net")
-        content {
-            includeModule("com.mojang", "brigadier")
-        }
-    }
-
-    maven("https://maven.winlogon.org/releases")
-    maven("https://repo.codemc.org/repository/maven-public/")
-    maven("https://jitpack.io")
 }
 
 dependencies {
@@ -86,18 +82,24 @@ tasks.test {
 }
 
 tasks.processResources {
+    val taskProjectNameProvider = providers.provider { project.rootProject.name }
+    val taskProjectVersionProvider = providers.provider { project.version.toString() }
+    val taskProjectGroupProvider = providers.provider { project.group.toString() }
+    val taskProjectDescriptionExtraProvider = providers.provider { project.rootProject.extra["projectDescription"] as String }
+    val taskMinecraftBaseExtraProvider = providers.provider { project.rootProject.extra["minecraftBase"] as String }
+
     filesMatching("**/paper-plugin.yml") {
         expand(mapOf(
-            "NAME" to rootProject.name,
-            "VERSION" to version,
-            "PACKAGE" to project.group.toString(),
-            "DESCRIPTION" to projectDescription,
-            "MCVERSION" to minecraftBase,
+            "NAME" to taskProjectNameProvider.get(),
+            "VERSION" to taskProjectVersionProvider.get(),
+            "PACKAGE" to taskProjectGroupProvider.get(),
+            "DESCRIPTION" to taskProjectDescriptionExtraProvider.get(),
+            "MCVERSION" to taskMinecraftBaseExtraProvider.get(),
         ))
     }
 }
 
-tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+tasks.named<ShadowJar>("shadowJar") {
     archiveClassifier.set("")
     minimize()
 }
