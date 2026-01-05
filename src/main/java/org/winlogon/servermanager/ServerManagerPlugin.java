@@ -7,6 +7,8 @@ import de.exlll.configlib.YamlConfigurations;
 
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 
+import lombok.Getter;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
@@ -34,11 +36,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class ServerManagerPlugin extends JavaPlugin {
+    private final Logger logger = getLogger();
+
+    @Getter
     private ServerManagerConfig mainConfig;
+    @Getter
     private final Map<String, ServiceConfig> serviceConfigs = new HashMap<>();
     private YamlConfigurationProperties configProperties;
 
@@ -46,10 +53,12 @@ public final class ServerManagerPlugin extends JavaPlugin {
     private Optional<DiscordWebhookSender> discordWebhookSender = Optional.empty();
 
     private final ScheduledExecutorService monitorExecutor = Executors.newScheduledThreadPool(1);
+    @Getter
     private final ExecutorService processesExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    private CommandRegistrar commandRegistrar;
+    @Getter
     private ProcessManager processManager;
+    @Getter
     private SchedulerAdapter schedulerAdapter;
 
     @Override
@@ -61,7 +70,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         var mainConfigPath = getDataFolder().toPath().resolve("config.yml");
         this.mainConfig = YamlConfigurations.update(mainConfigPath, ServerManagerConfig.class, configProperties);
 
-        OperatingSystem.init(getLogger());
+        OperatingSystem.init(logger);
 
         loadServiceConfigs();
     }
@@ -69,12 +78,12 @@ public final class ServerManagerPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         this.processManager = new ProcessManager(this, mainConfig, serviceConfigs, monitorExecutor, processesExecutor);
-        this.commandRegistrar = new CommandRegistrar(this);
+        var commandRegistrar = new CommandRegistrar(this);
         this.schedulerAdapter = new SchedulerAdapter(this);
         try {
             this.cronJobManager = new CronJobManager(this);
         } catch (SchedulerException e) {
-            getLogger().log(Level.SEVERE, "Failed to initialize cron job manager. Cron jobs will be disabled.", e);
+            logger.log(Level.SEVERE, "Failed to initialize cron job manager. Cron jobs will be disabled.", e);
             mainConfig.cronJobsEnabled = false;
         }
 
@@ -85,39 +94,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         logSystemInfo();
         setupDiscord();
 
-        getLogger().info("ServerManager has been enabled!");
-    }
-
-    private void scheduleTasks() {
-        if (mainConfig.oomKillerEnabled) {
-            monitorExecutor.scheduleAtFixedRate(processManager::runOOMKiller, 10, 10, TimeUnit.SECONDS);
-            getLogger().info("OOM Killer enabled and scheduled to run every 10 seconds.");
-        }
-
-        if (mainConfig.cronJobsEnabled && cronJobManager != null) {
-            loadCronConfigs();
-            cronJobManager.startScheduler();
-            getLogger().info("Cron jobs enabled and scheduled.");
-        }
-    }
-
-    private void logSystemInfo() {
-        var si = new SystemInfo();
-        var os = si.getOperatingSystem();
-        var hal = si.getHardware();
-
-        getLogger().info("OS: " + os.getFamily() + " " + os.getVersionInfo());
-        getLogger().info("CPU: " + hal.getProcessor().getProcessorIdentifier().getName());
-        getLogger().info("Memory: " + (hal.getMemory().getTotal() / (1024 * 1024 * 1024)) + " GB");
-    }
-
-    private void setupDiscord() {
-        if (mainConfig.discordWebhooksEnabled && !mainConfig.discordWebhookUrl.isEmpty()) {
-            this.discordWebhookSender = Optional.of(new DiscordWebhookSender(mainConfig.discordWebhookUrl, getLogger()));
-            getLogger().info("Discord webhook integration enabled.");
-        } else {
-            this.discordWebhookSender = Optional.empty();
-        }
+        logger.info("ServerManager has been enabled!");
     }
 
     @Override
@@ -138,11 +115,41 @@ public final class ServerManagerPlugin extends JavaPlugin {
             cronJobManager.shutdownScheduler();
         }
 
-        getLogger().info("ServerManager has been disabled!");
+        logger.info("ServerManager has been disabled!");
     }
 
-    public Map<String, ServiceConfig> getServiceConfigs() {
-        return serviceConfigs;
+    private void scheduleTasks() {
+        if (mainConfig.oomKillerEnabled) {
+            monitorExecutor.scheduleAtFixedRate(processManager::runOOMKiller, 10, 10, TimeUnit.SECONDS);
+            logger.info("OOM Killer enabled and scheduled to run every 10 seconds.");
+        }
+
+        if (mainConfig.cronJobsEnabled && cronJobManager != null) {
+            loadCronConfigs();
+            cronJobManager.startScheduler();
+            logger.info("Cron jobs enabled and scheduled.");
+        }
+    }
+
+    // Logs system info when enabling
+    private void logSystemInfo() {
+        var si = new SystemInfo();
+        var os = si.getOperatingSystem();
+        var hal = si.getHardware();
+
+        logger.info("OS: " + os.getFamily() + " " + os.getVersionInfo());
+        logger.info("CPU: " + hal.getProcessor().getProcessorIdentifier().getName());
+        logger.info("Memory: " + (hal.getMemory().getTotal() / (1024 * 1024 * 1024)) + " GB");
+    }
+
+    // Sets up Discord webhooks if they are configured
+    private void setupDiscord() {
+        if (mainConfig.discordWebhooksEnabled && !mainConfig.discordWebhookUrl.isEmpty()) {
+            this.discordWebhookSender = Optional.of(new DiscordWebhookSender(mainConfig.discordWebhookUrl, logger));
+            logger.info("Discord webhook integration enabled.");
+        } else {
+            this.discordWebhookSender = Optional.empty();
+        }
     }
 
     private void loadServiceConfigs() {
@@ -152,7 +159,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         try {
             Files.createDirectories(servicesFolder);
         } catch (IOException e) {
-            getLogger().log(Level.SEVERE, "Failed to create services directory.", e);
+            logger.log(Level.SEVERE, "Failed to create services directory.", e);
             return;
         }
 
@@ -163,12 +170,12 @@ public final class ServerManagerPlugin extends JavaPlugin {
                 .collect(Collectors.toMap(
                     serviceFile -> serviceFile.getFileName().toString().replace(".yml", ""),
                     serviceFile -> {
-                        getLogger().info("Loaded service config: " + serviceFile.getFileName());
+                        logger.info("Loaded service config: " + serviceFile.getFileName());
                         return YamlConfigurations.update(serviceFile, ServiceConfig.class, configProperties);
                     }
                 )));
         } catch (IOException e) {
-            getLogger().log(Level.SEVERE, "Failed to load service configs.", e);
+            logger.log(Level.SEVERE, "Failed to load service configs.", e);
         }
     }
 
@@ -178,7 +185,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         try {
             Files.createDirectories(cronFolder);
         } catch (IOException e) {
-            getLogger().log(Level.SEVERE, "Failed to create cron directory.", e);
+            logger.log(Level.SEVERE, "Failed to create cron directory.", e);
             return;
         }
 
@@ -188,34 +195,22 @@ public final class ServerManagerPlugin extends JavaPlugin {
                 .filter(Files::isRegularFile)
                 .filter(p -> p.getFileName().toString().endsWith(".yml"))
                 .map(cronFile -> {
-                    getLogger().info("Loaded cron config: " + cronFile.getFileName());
+                    logger.info("Loaded cron config: " + cronFile.getFileName());
                     return YamlConfigurations.update(cronFile, CronConfig.class, configProperties);
                 })
-                .collect(Collectors.toList()));
+                .toList());
         } catch (IOException e) {
-            getLogger().log(Level.SEVERE, "Failed to load cron configs.", e);
+            logger.log(Level.SEVERE, "Failed to load cron configs.", e);
         }
         cronJobManager.scheduleJobs(cronConfigs);
     }
 
-    public ServerManagerConfig getMainConfig() {
-        return mainConfig;
-    }
-
-    public ExecutorService getProcessesExecutor() {
-        return processesExecutor;
-    }
-
-    public ProcessManager getProcessManager() {
-        return processManager;
-    }
-
-    public SchedulerAdapter getSchedulerAdapter() {
-        return schedulerAdapter;
-    }
-
+    /**
+     * Sends a message to the configured Discord webhook, and if it's not configured, a warning message will be logged, containing the message.
+     * @param message The message to send
+     */
     public void sendDiscordMessage(String message) {
-        discordWebhookSender.ifPresentOrElse(sender -> sender.sendMessage(message), () -> getLogger().warning(message));
+        discordWebhookSender.ifPresentOrElse(sender -> sender.sendMessage(message), () -> logger.warning(message));
     }
 
     public void reloadConfigs(CommandSourceStack source) {

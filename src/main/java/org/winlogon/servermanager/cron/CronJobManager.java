@@ -14,14 +14,14 @@ import java.util.logging.Logger;
 public class CronJobManager {
     private final ServerManagerPlugin plugin;
     private final Logger logger;
-    private Scheduler scheduler;
+    private final Scheduler scheduler;
 
     public CronJobManager(ServerManagerPlugin plugin) throws SchedulerException {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
         var props = new Properties();
         // Set thread count to 1
-        props.put("org.quartz.threadPool.threadCount", "1");
+        props.setProperty("org.quartz.threadPool.threadCount", "1");
         this.scheduler = new StdSchedulerFactory(props).getScheduler();
     }
 
@@ -35,14 +35,14 @@ public class CronJobManager {
                 throw new IllegalStateException("Scheduler is already started");
             }
         } catch (SchedulerException e) {
-            logger.log(Level.SEVERE, "Failed to check scheduler status: " + e.getMessage());
+            logger.log(Level.SEVERE, "Failed to check scheduler status", e);
             return;
         }
 
         try {
             scheduler.start();
         } catch (SchedulerException e) {
-            logger.log(Level.SEVERE, "Failed to start scheduler: " + e.getMessage());
+            logger.log(Level.SEVERE, "Failed to start scheduler", e);
         }
 
         logger.log(Level.INFO, "Cron scheduler started.");
@@ -61,7 +61,7 @@ public class CronJobManager {
             scheduler.shutdown(true);
             logger.log(Level.INFO, "Cron scheduler shut down.");
         } catch (SchedulerException e) {
-            logger.log(Level.SEVERE, "Failed to shut down scheduler: " + e.getMessage());
+            logger.log(Level.SEVERE, "Failed to shut down scheduler", e);
         }
     }
 
@@ -95,25 +95,23 @@ public class CronJobManager {
                 logger.log(Level.INFO, "Scheduled cron job: " + config.command + " with expression: " + config.expression);
             }
         } catch (SchedulerException e) {
-            logger.log(Level.SEVERE, "Failed to schedule cron jobs: " + e.getMessage());
+            logger.log(Level.SEVERE, "Failed to schedule cron jobs", e);
         } catch (RuntimeException e) {
-            logger.log(Level.SEVERE, "Invalid cron expression: " + e.getMessage());
+            logger.log(Level.SEVERE, "Invalid cron expression", e);
         }
     }
 
     public static class CronCommandJob implements Job {
         @Override
-        public void execute(JobExecutionContext context) throws JobExecutionException {
+        public void execute(JobExecutionContext context) {
             JobDataMap data = context.getJobDetail().getJobDataMap();
             var command = data.getString("command");
-            var plugin = (ServerManagerPlugin) data.get("plugin");
 
+            var plugin = (ServerManagerPlugin) data.get("plugin");
             plugin.getLogger().info("Executing cron command: " + command);
 
-            // Execute the command on the main thread to interact with Bukkit API safely
-            plugin.getSchedulerAdapter().runNow(() -> {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
-            });
+            // Execute the command as console on the main thread to interact with Bukkit API safely
+            plugin.getSchedulerAdapter().runNow(() -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
         }
     }
 }
