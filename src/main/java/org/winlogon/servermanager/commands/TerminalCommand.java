@@ -10,7 +10,6 @@ import io.papermc.paper.command.brigadier.Commands;
 
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.winlogon.servermanager.PluginCommand;
@@ -27,7 +26,6 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class TerminalCommand implements PluginCommand {
-    private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
     private final Logger logger;
 
@@ -49,22 +47,16 @@ public class TerminalCommand implements PluginCommand {
     }
 
     public TerminalCommand(ServerManagerPlugin plugin) {
-        this.plugin = plugin;
         this.logger = plugin.getLogger();
 
         // Using the same executor as process management
         this.commandExecutor = plugin.getProcessesExecutor();
-        var pm = Bukkit.getPluginManager();
-
-        // Register permission if it doesn't exist
-        if (pm.getPermission(permissionNode) == null) {
-            pm.addPermission(perm);
-        }
+        registerIfNotExists(plugin);
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> createCommand() {
         return Commands.literal("terminal")
-            .requires(source -> source.getSender().hasPermission(permissionNode))
+            .requires(this::hasPermission)
             .then(Commands.argument("command", StringArgumentType.greedyString())
                 .executes(this::executeTerminalCommand)
             );
@@ -108,7 +100,7 @@ public class TerminalCommand implements PluginCommand {
                     "<red>Error executing command: <error></red>",
                     Placeholder.unparsed("error", e.getMessage())
                 );
-                logger.log(Level.SEVERE, "Error executing terminal command: " + e.getMessage());
+                logger.log(Level.SEVERE, "Error executing terminal command", e);
             }
         }, commandExecutor);
 

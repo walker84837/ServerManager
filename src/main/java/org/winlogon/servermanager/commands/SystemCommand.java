@@ -10,7 +10,6 @@ import io.papermc.paper.command.brigadier.Commands;
 
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import org.bukkit.Bukkit;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.winlogon.servermanager.PluginCommand;
@@ -55,16 +54,12 @@ public class SystemCommand implements PluginCommand {
     public SystemCommand(ServerManagerPlugin plugin) {
         this.plugin = plugin;
         this.commandExecutor = plugin.getProcessesExecutor();
-        var pm = Bukkit.getPluginManager();
-
-        if (pm.getPermission(permissionNode) == null) {
-            pm.addPermission(perm);
-        }
+        registerIfNotExists(plugin);
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> createCommand() {
         return Commands.literal("system")
-            .requires(source -> source.getSender().hasPermission(permissionNode))
+            .requires(this::hasPermission)
             .then(Commands.literal("install")
                 .then(Commands.argument("package", StringArgumentType.greedyString())
                     .executes(this::installPackage)
@@ -313,13 +308,11 @@ public class SystemCommand implements PluginCommand {
         if (runningProcesses.isEmpty()) {
             sender.sendRichMessage("<gray>  No managed processes running.</gray>");
         } else {
-            runningProcesses.forEach((name, handle) -> {
-                sender.sendRichMessage(
-                    "<green>  - <proc> (PID: <pid>)</green>",
-                    Placeholder.unparsed("proc", name),
-                    Placeholder.unparsed("pid", String.valueOf(handle.pid()))
-                );
-            });
+            runningProcesses.forEach((name, handle) -> sender.sendRichMessage(
+                "<green>  - <proc> (PID: <pid>)</green>",
+                Placeholder.unparsed("proc", name),
+                Placeholder.unparsed("pid", String.valueOf(handle.pid()))
+            ));
         }
 
         return Command.SINGLE_SUCCESS;
