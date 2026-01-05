@@ -1,6 +1,7 @@
 package org.winlogon.servermanager.discord;
 
 import java.net.URI;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.net.http.HttpClient;
@@ -13,47 +14,47 @@ public class DiscordWebhookSender {
     private final HttpClient httpClient;
 
     public DiscordWebhookSender(String webhookUrl, Logger logger) {
-        this.webhookUrl = webhookUrl;
-        this.logger = logger;
+        this.webhookUrl = Objects.requireNonNull(webhookUrl, "webhookUrl");
+        this.logger = Objects.requireNonNull(logger, "logger");
         this.httpClient = HttpClient.newHttpClient();
     }
 
     public void sendMessage(String message) {
-        if (webhookUrl == null || webhookUrl.isEmpty()) {
-            logger.log(Level.WARNING, "Discord webhook URL is not configured.");
+        if (webhookUrl.isBlank()) {
+            logger.warning("Discord webhook URL is not configured.");
             return;
         }
 
-        try {
-            String jsonPayload = "{\"content\": \"" + escapeJson(message) + "\"}";
+        var jsonPayload = """
+            {
+              "content": "%s"
+            }
+            """.formatted(escapeJson(message));
 
-            var request = HttpRequest.newBuilder()
-                    .uri(URI.create(webhookUrl))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
-                    .build();
+        var request = HttpRequest.newBuilder()
+                .uri(URI.create(webhookUrl))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                .build();
 
-            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenAccept(response -> {
-                    int responseCode = response.statusCode();
-                    if (responseCode < 200 || responseCode >= 300) {
-                        logger.log(Level.SEVERE, "Failed to send Discord webhook message. Response Code: " + responseCode + ", Response: " + response.body());
-                    } else {
-                        logger.log(Level.INFO, "Discord webhook message sent successfully.");
-                    }
-                })
-                .exceptionally(ex -> {
-                    logger.log(Level.SEVERE, "Error sending Discord webhook message: " + ex.getMessage());
-                    return null;
-                });
+        httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+            .thenAccept(response -> {
+                int code = response.statusCode();
 
-        } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error preparing Discord webhook message: " + e.getMessage());
-        }
+                if (code / 100 != 2) {
+                    logger.log(Level.SEVERE, "Failed to send Discord webhook message. Response Code: " + code + ", Response: " + response.body());
+                } else {
+                    logger.fine("Discord webhook message sent successfully.");
+                }
+            })
+            .exceptionally(ex -> {
+                logger.log(Level.SEVERE, "Error sending Discord webhook message", ex);
+                return null;
+            });
     }
 
     private static String escapeJson(String text) {
-        StringBuilder sb = new StringBuilder();
+        var sb = new StringBuilder();
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             switch (c) {
