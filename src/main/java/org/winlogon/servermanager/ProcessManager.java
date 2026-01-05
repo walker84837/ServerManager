@@ -187,11 +187,11 @@ public class ProcessManager {
         }
     }
 
+    // TODO: this relies on Paper/Bukkit's scheduler, and won't work on Folia. `SchedulerAdapter` is a better option.
     private void handleAutoRestart(String programName, ServiceConfig config, CommandSender sender) {
         if (!config.autoRestart) return;
 
         logger.info("Auto-restarting program: " + programName);
-        plugin.getSLF4JLogger().warn("Auto-restarting program: {}", programName);
         Bukkit.getScheduler().runTask(plugin, () -> {
             sendWarningMessage(sender, "Auto-restarting program: <gold><program></gold>", programName);
         });
@@ -227,6 +227,8 @@ public class ProcessManager {
             .map(entry -> "  - <green>" + entry.getKey() + " (PID: " + entry.getValue().pid() + ")</green>")
             .collect(Collectors.joining("\n"));
 
+        // TODO: Placeholder.unparsed doesn't parse the MiniMessage a string contains. However, this variable contains that.
+        // Maybe the `available_programs` placeholder should be effectively deserialized as MiniMessage?
         var availablePrograms = serviceConfigs.keySet().stream()
             .map(programName -> {
                 boolean isRunning = runningProcesses.containsKey(programName);
@@ -235,7 +237,7 @@ public class ProcessManager {
             })
             .collect(Collectors.joining("\n"));
 
-        String message = """
+        var message = """
             <gold>=== Running Processes ===</gold>
             <gray><running_processes></gray>
 
