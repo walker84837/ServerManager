@@ -1,5 +1,7 @@
 package org.winlogon.servermanager;
 
+import lombok.Getter;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -38,14 +40,11 @@ public class OperatingSystem {
         ARCH(pkg -> "sudo pacman -S --noconfirm " + pkg),
         UNKNOWN(pkg -> "echo 'Unsupported distro'");
 
+        @Getter
         private final PackageManager packageManager;
 
         LinuxDistro(PackageManager packageManager) {
             this.packageManager = packageManager;
-        }
-
-        public PackageManager getPackageManager() {
-            return packageManager;
         }
 
         public static LinuxDistro detect() {
