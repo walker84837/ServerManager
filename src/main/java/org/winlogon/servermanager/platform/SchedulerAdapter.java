@@ -1,21 +1,23 @@
 package org.winlogon.servermanager.platform;
 
-import org.winlogon.servermanager.ServerManagerPlugin;
+import org.bukkit.plugin.Plugin;
 
 public class SchedulerAdapter {
-    private final ServerManagerPlugin plugin;
+    private final Plugin plugin;
     private final boolean isFolia;
 
-    public SchedulerAdapter(ServerManagerPlugin plugin) {
+    public SchedulerAdapter(Plugin plugin) {
         this.plugin = plugin;
         this.isFolia = isFolia();
     }
 
     public void runNow(Runnable task) {
+        var server = plugin.getServer();
+
         if (isFolia) {
-            plugin.getServer().getGlobalRegionScheduler().run(plugin, p -> task.run());
+            server.getGlobalRegionScheduler().run(plugin, p -> task.run());
         } else {
-            plugin.getServer().getScheduler().runTask(plugin, task);
+            server.getScheduler().runTask(plugin, task);
         }
     }
 
