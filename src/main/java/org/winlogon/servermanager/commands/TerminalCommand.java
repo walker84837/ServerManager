@@ -26,6 +26,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class TerminalCommand implements PluginCommand {
+    private final ServerManagerPlugin plugin;
     private final ExecutorService commandExecutor;
     private final Logger logger;
 
@@ -47,6 +48,7 @@ public class TerminalCommand implements PluginCommand {
     }
 
     public TerminalCommand(ServerManagerPlugin plugin) {
+        this.plugin = plugin;
         this.logger = plugin.getLogger();
 
         // Using the same executor as process management
@@ -67,7 +69,8 @@ public class TerminalCommand implements PluginCommand {
         var sender = context.getSource().getSender();
 
         sender.sendRichMessage(
-            "<yellow>Executing command: <cmd></yellow>",
+            "<primary>Executing command: <cmd></primary>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("cmd", command)
         );
 
@@ -78,26 +81,30 @@ public class TerminalCommand implements PluginCommand {
                 int exitCode = process.waitFor();
 
                 if (exitCode == 0) {
-                    sender.sendRichMessage("<green>Command executed successfully. Output:</green>");
+                    sender.sendRichMessage("<success>Command executed successfully. Output:</success>", plugin.getMessageTheme().getPaletteResolver());
                     sender.sendRichMessage(
-                        "<white><out></white>",
+                        "<foreground><out></foreground>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("out", output)
                     );
                 } else {
                     String errorOutput = readProcessOutput(process.getErrorStream());
                     sender.sendRichMessage(
-                        "<red>Command failed with exit code <exit-code>. Error:</red>",
+                        "<failure>Command failed with exit code <exit-code>. Error:</failure>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
-                        "<red><err></red>",
+                        "<failure><err></failure>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("err", errorOutput)
                     );
                 }
 
             } catch (Exception e) {
                 sender.sendRichMessage(
-                    "<red>Error executing command: <error></red>",
+                    "<failure>Error executing command: <error></failure>",
+                    plugin.getMessageTheme().getPaletteResolver(),
                     Placeholder.unparsed("error", e.getMessage())
                 );
                 logger.log(Level.SEVERE, "Error executing terminal command", e);

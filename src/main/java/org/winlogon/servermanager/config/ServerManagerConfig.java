@@ -20,6 +20,9 @@ public class ServerManagerConfig {
     @Comment("Maximum total memory (in MB) allowed for all processes managed by the plugin. Set to 0 for no limit.")
     public long totalMemoryLimitMB = 0;
 
+    @Comment("Color palette for message theming")
+    public PaletteConfig palette = new PaletteConfig();
+
     public ServerManagerConfig() {
     }
 }

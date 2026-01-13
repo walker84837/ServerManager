@@ -232,20 +232,21 @@ public class ProcessManager {
         var availablePrograms = serviceConfigs.keySet().stream()
             .map(programName -> {
                 boolean isRunning = runningProcesses.containsKey(programName);
-                String status = isRunning ? "<green>[RUNNING]</green>" : "<red>[STOPPED]</red>";
+                String status = isRunning ? "<success>[RUNNING]</success>" : "<failure>[STOPPED]</failure>";
                 return "  - " + programName + status;
             })
             .collect(Collectors.joining("\n"));
 
         var message = """
-            <gold>=== Running Processes ===</gold>
-            <gray><running_processes></gray>
+            <secondary>=== Running Processes ===</secondary>
+            <placeholder><running_processes></placeholder>
 
-            <gold>=== Available Programs ===</gold>
+            <secondary>=== Available Programs ===</secondary>
             <available_programs>
             """;
 
         source.getSender().sendRichMessage(message,
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("running_processes", runningProcesses.isEmpty() ? "  No processes running" : runningProcessEntries),
             Placeholder.unparsed("available_programs", availablePrograms)
         );
@@ -341,24 +342,27 @@ public class ProcessManager {
 
     // Helper methods for consistent messaging
     private void sendErrorMessage(CommandSender sender, String message, String programName) {
-        sender.sendRichMessage("<red>" + message + "</red>",
+        sender.sendRichMessage("<failure>" + message + "</failure>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("program", programName)
         );
     }
 
     private void sendWarningMessage(CommandSender sender, String message, String programName) {
-        sender.sendRichMessage("<yellow>" + message + "</yellow>",
+        sender.sendRichMessage("<primary>" + message + "</primary>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("program", programName)
         );
     }
 
     private void sendSuccessMessage(CommandSender sender, String message) {
-        sender.sendMessage(Component.text(message, NamedTextColor.GREEN));
+        sender.sendRichMessage("<success>" + message + "</success>", plugin.getMessageTheme().getPaletteResolver());
     }
 
     private void handleStartupFailure(String programName, CommandSender sender, Exception e, String context) {
         sender.sendRichMessage(
-            "<red>" + context + " '<program>': " + e.getMessage() + "</red>",
+            "<failure>" + context + " '<program>': " + e.getMessage() + "</failure>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("program", programName)
         );
         logger.severe(context + " '" + programName + "': " + e.getMessage());
@@ -366,7 +370,8 @@ public class ProcessManager {
 
     private void handleStopFailure(String programName, CommandSender sender, Exception e) {
         sender.sendRichMessage(
-            "<red>Failed to stop program <program>: <exception></red>",
+            "<failure>Failed to stop program <program>: <exception></failure>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("program", programName),
             Placeholder.unparsed("exception", e.getMessage())
         );

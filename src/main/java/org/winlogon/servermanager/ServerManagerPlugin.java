@@ -60,6 +60,8 @@ public final class ServerManagerPlugin extends JavaPlugin {
     private ProcessManager processManager;
     @Getter
     private SchedulerAdapter schedulerAdapter;
+    @Getter
+    private MessageTheme messageTheme;
 
     @Override
     public void onLoad() {
@@ -77,6 +79,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        this.messageTheme = new MessageTheme(mainConfig.palette);
         this.processManager = new ProcessManager(this, mainConfig, serviceConfigs, monitorExecutor, processesExecutor);
         var commandRegistrar = new CommandRegistrar(this);
         this.schedulerAdapter = new SchedulerAdapter(this);
@@ -218,6 +221,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
 
         var mainConfigPath = getDataFolder().toPath().resolve("config.yml");
         this.mainConfig = YamlConfigurations.update(mainConfigPath, ServerManagerConfig.class, configProperties);
+        this.messageTheme = new MessageTheme(mainConfig.palette);
 
         loadServiceConfigs();
         loadCronConfigs();
@@ -228,8 +232,6 @@ public final class ServerManagerPlugin extends JavaPlugin {
             cronJobManager.shutdownScheduler();
         }
 
-        source.getSender().sendMessage(
-            Component.text("Configuration reloaded!", NamedTextColor.GREEN)
-        );
+        source.getSender().sendRichMessage("<success>Configuration reloaded!</success>", messageTheme.getPaletteResolver());
     }
 }

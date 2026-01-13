@@ -86,7 +86,8 @@ public class SystemCommand implements PluginCommand {
         var sender = context.getSource().getSender();
 
         sender.sendRichMessage(
-            "<yellow>Attempting to install package: <pkg></yellow>",
+            "<primary>Attempting to install package: <pkg></primary>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("pkg", packageName)
         );
 
@@ -94,7 +95,7 @@ public class SystemCommand implements PluginCommand {
             var installCommand = OperatingSystem.buildInstallCommand(packageName);
 
             if (installCommand.isEmpty()) {
-                sender.sendRichMessage("<red>Package installation not supported on this OS.</red>");
+                sender.sendRichMessage("<failure>Package installation not supported on this OS.</failure>", plugin.getMessageTheme().getPaletteResolver());
                 return;
             }
 
@@ -110,27 +111,32 @@ public class SystemCommand implements PluginCommand {
 
                 if (exitCode == 0) {
                     sender.sendRichMessage(
-                        "<green>Package '<name>' installed successfully. Output:</green>",
+                        "<success>Package '<name>' installed successfully. Output:</success>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("name", packageName)
                     );
                     sender.sendRichMessage(
-                        "<white><out></white>",
+                        "<foreground><out></foreground>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("out", output)
                     );
                 } else {
                     sender.sendRichMessage(
-                        "<red>Package installation failed with exit code <exit-code>. Error:</red>",
+                        "<failure>Package installation failed with exit code <exit-code>. Error:</failure>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
-                        "<red><err></red>",
+                        "<failure><err></failure>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("err", output)
                     );
                 }
 
             } catch (Exception e) {
                 sender.sendRichMessage(
-                    "<red>Error installing package: <err></red>",
+                    "<failure>Error installing package: <err></failure>",
+                    plugin.getMessageTheme().getPaletteResolver(),
                     Placeholder.unparsed("err", e.getMessage())
                 );
                 plugin.getLogger().severe("Error installing package: " + e.getMessage());
@@ -146,17 +152,20 @@ public class SystemCommand implements PluginCommand {
         long availableMemory = hardware.getMemory().getAvailable();
         long usedMemory = totalMemory - availableMemory;
 
-        sender.sendRichMessage("<gold>=== RAM Usage ===</gold>");
+        sender.sendRichMessage("<secondary>=== RAM Usage ===</secondary>", plugin.getMessageTheme().getPaletteResolver());
         sender.sendRichMessage(
-            "<aqua>Total: <total></aqua>",
+            "<foreground>Total: <total></foreground>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("total", FormatUtil.formatBytes(totalMemory))
         );
         sender.sendRichMessage(
-            "<green>Used: <used></green>",
+            "<success>Used: <used></success>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("used", FormatUtil.formatBytes(usedMemory))
         );
         sender.sendRichMessage(
-            "<yellow>Available: <avail></yellow>",
+            "<primary>Available: <avail></primary>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("avail", FormatUtil.formatBytes(availableMemory))
         );
 
