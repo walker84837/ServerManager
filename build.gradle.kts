@@ -67,6 +67,7 @@ dependencies {
     compileOnly(libs.oshi.core)
     compileOnly(libs.quartz)
     compileOnly(libs.lombok)
+    compileOnly(libs.asynccraftr)
     annotationProcessor(libs.lombok)
 
     testCompileOnly(libs.lombok)

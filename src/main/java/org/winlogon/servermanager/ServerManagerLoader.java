@@ -16,6 +16,7 @@ public class ServerManagerLoader implements PluginLoader {
         var repositories = new RemoteRepository[] {
             repo("central", MavenLibraryResolver.MAVEN_CENTRAL_DEFAULT_MIRROR),
             repo("jitpack", "https://jitpack.io"),
+            repo("winlogon", "https://maven.winlogon.org/releases")
         };
 
         for (var repository : repositories) {
@@ -27,6 +28,7 @@ public class ServerManagerLoader implements PluginLoader {
             dependency("de.exlll:configlib-paper:4.6.3"),
             dependency("com.github.oshi:oshi-core:6.4.0"),
             dependency("org.quartz-scheduler:quartz:2.3.2"),
+            dependency("org.winlogon:asynccraftr:0.2.0")
         };
 
         for (var dependency : dependencies) {
