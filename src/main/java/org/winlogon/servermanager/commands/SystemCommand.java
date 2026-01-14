@@ -1,5 +1,6 @@
 package org.winlogon.servermanager.commands;
 
+import com.google.common.io.CharStreams;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -104,7 +105,7 @@ public class SystemCommand implements PluginCommand {
 
                 String output;
                 try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                    output = com.google.common.io.CharStreams.toString(reader);
+                    output = CharStreams.toString(reader);
                 }
 
                 int exitCode = process.waitFor();

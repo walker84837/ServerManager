@@ -2,6 +2,7 @@ package org.winlogon.servermanager.config;
 
 import de.exlll.configlib.Comment;
 import de.exlll.configlib.Configuration;
+
 import net.kyori.adventure.text.format.NamedTextColor;
 
 @Configuration

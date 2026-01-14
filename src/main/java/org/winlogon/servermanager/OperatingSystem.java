@@ -113,7 +113,7 @@ public class OperatingSystem {
                 ? new String[] { "cmd", "/c", command }
                 : new String[] { "/bin/sh", "-c", command };
 
-        ProcessBuilder builder = new ProcessBuilder(args);
+        var builder = new ProcessBuilder(args);
         builder.redirectErrorStream(true);
 
         try {
@@ -145,7 +145,7 @@ public class OperatingSystem {
         boolean isWindows = Type.detect() == Type.WINDOWS;
         List<String> dirs = Arrays.stream(pathEnv.split(File.pathSeparator))
                 .filter(s -> !s.isBlank())
-                .collect(Collectors.toList());
+                .toList();
 
         List<String> exts;
         if (isWindows) {
