@@ -4,11 +4,9 @@ import com.github.walker84837.JResult.Result;
 
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import org.bukkit.Bukkit;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.command.CommandSender;
 import org.winlogon.servermanager.config.ServerManagerConfig;
 import org.winlogon.servermanager.config.ServiceConfig;
@@ -18,6 +16,7 @@ import oshi.software.os.OperatingSystem;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -43,6 +42,7 @@ public class ProcessManager {
     private final Map<String, CompletableFuture<Void>> processFutures = new ConcurrentHashMap<>();
     private final SystemInfo systemInfo = new SystemInfo();
     private final OperatingSystem os = systemInfo.getOperatingSystem();
+    private final TagResolver palettes;
 
     public ProcessManager(
         ServerManagerPlugin plugin, ServerManagerConfig mainConfig,
@@ -55,6 +55,7 @@ public class ProcessManager {
         this.serviceConfigs = serviceConfigs;
         this.monitorExecutor = monitorExecutor;
         this.processesExecutor = processesExecutor;
+        this.palettes = plugin.getMessageTheme().getPaletteResolver();
     }
 
     public Map<String, ProcessHandle> getRunningProcesses() {
@@ -141,6 +142,7 @@ public class ProcessManager {
         }, config.duration, config.durationUnit);
     }
 
+    // TODO: there should be just forcibly and a "soft close" signal (e.g. SIGKILL vs SIGTERM on Linux). The signal handling is OS-dependent and this isn't intended.
     private void sendKillSignal(ProcessHandle handle, String signal) {
         var osType = org.winlogon.servermanager.OperatingSystem.Type.detect();
         try {
@@ -187,16 +189,16 @@ public class ProcessManager {
         }
     }
 
-    // TODO: this relies on Paper/Bukkit's scheduler, and won't work on Folia. `SchedulerAdapter` is a better option.
     private void handleAutoRestart(String programName, ServiceConfig config, CommandSender sender) {
         if (!config.autoRestart) return;
 
         logger.info("Auto-restarting program: " + programName);
-        Bukkit.getScheduler().runTask(plugin, () -> {
+
+        plugin.getSchedulerAdapter().runNow(() -> {
             sendWarningMessage(sender, "Auto-restarting program: <gold><program></gold>", programName);
         });
 
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> startProcess(programName, sender), 5 * 20);
+        plugin.getSchedulerAdapter().runLater(() -> startProcess(programName, sender), Duration.ofSeconds(5));
     }
 
     public void stopProcess(String programName, CommandSender sender) {
@@ -227,8 +229,6 @@ public class ProcessManager {
             .map(entry -> "  - <green>" + entry.getKey() + " (PID: " + entry.getValue().pid() + ")</green>")
             .collect(Collectors.joining("\n"));
 
-        // TODO: Placeholder.unparsed doesn't parse the MiniMessage a string contains. However, this variable contains that.
-        // Maybe the `available_programs` placeholder should be effectively deserialized as MiniMessage?
         var availablePrograms = serviceConfigs.keySet().stream()
             .map(programName -> {
                 boolean isRunning = runningProcesses.containsKey(programName);
@@ -246,9 +246,9 @@ public class ProcessManager {
             """;
 
         source.getSender().sendRichMessage(message,
-            plugin.getMessageTheme().getPaletteResolver(),
-            Placeholder.unparsed("running_processes", runningProcesses.isEmpty() ? "  No processes running" : runningProcessEntries),
-            Placeholder.unparsed("available_programs", availablePrograms)
+            palettes,
+            Placeholder.parsed("running_processes", runningProcesses.isEmpty() ? "  No processes running" : runningProcessEntries),
+            Placeholder.parsed("available_programs", availablePrograms)
         );
     }
 
@@ -275,13 +275,17 @@ public class ProcessManager {
 
     private MemoryUsageSnapshot captureMemoryUsage() {
         Map<String, OSProcess> osProcesses = new HashMap<>();
-        long currentTotalMemoryUsage = 0;
+        long currentTotalMemoryUsage;
 
-        for (Map.Entry<String, ProcessHandle> entry : runningProcesses.entrySet()) {
-            os.getProcess((int) entry.getValue().pid());
-            Optional.ofNullable(os.getProcess((int) entry.getValue().pid())).ifPresent(osProcess -> {
-                osProcesses.put(entry.getKey(), osProcess);
-            });
+        for (var entry : runningProcesses.entrySet()) {
+            var process = entry.getValue();
+            var name = entry.getKey();
+            var pid = (int) process.pid();
+
+            os.getProcess(pid);
+
+            Optional.ofNullable(os.getProcess(pid))
+                    .ifPresent(osProcess -> osProcesses.put(name, osProcess));
         }
         
         currentTotalMemoryUsage = osProcesses.values().stream()
@@ -296,7 +300,10 @@ public class ProcessManager {
             (snapshot.totalMemoryUsage / (1024 * 1024)) + " MB) exceeds limit (" +
             mainConfig.totalMemoryLimitMB + " MB). Initiating OOM kill.");
 
-        Optional<Map.Entry<String, OSProcess>> victim = snapshot.osProcesses.entrySet().stream()
+        // Select the process with the highest OOM "badness" score
+        // (RSS + virtual memory), i.e. the biggest overall memory offender.
+        var victim = snapshot.osProcesses.entrySet()
+            .stream()
             .max(Comparator.comparingLong(e -> calculateOOMBadness(e.getValue())));
 
         victim.ifPresentOrElse(
@@ -311,7 +318,7 @@ public class ProcessManager {
                 " (PID: " + victimHandle.pid() + ") due to excessive memory usage.");
             victimHandle.destroyForcibly();
 
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            plugin.getSchedulerAdapter().runNow(() -> {
                 logger.info("OOM Killer: Killed process " + programName + ".");
             });
         });
@@ -343,14 +350,14 @@ public class ProcessManager {
     // Helper methods for consistent messaging
     private void sendErrorMessage(CommandSender sender, String message, String programName) {
         sender.sendRichMessage("<failure>" + message + "</failure>",
-            plugin.getMessageTheme().getPaletteResolver(),
+            palettes,
             Placeholder.unparsed("program", programName)
         );
     }
 
     private void sendWarningMessage(CommandSender sender, String message, String programName) {
         sender.sendRichMessage("<primary>" + message + "</primary>",
-            plugin.getMessageTheme().getPaletteResolver(),
+            palettes,
             Placeholder.unparsed("program", programName)
         );
     }
@@ -362,7 +369,7 @@ public class ProcessManager {
     private void handleStartupFailure(String programName, CommandSender sender, Exception e, String context) {
         sender.sendRichMessage(
             "<failure>" + context + " '<program>': " + e.getMessage() + "</failure>",
-            plugin.getMessageTheme().getPaletteResolver(),
+            palettes,
             Placeholder.unparsed("program", programName)
         );
         logger.severe(context + " '" + programName + "': " + e.getMessage());
@@ -371,7 +378,7 @@ public class ProcessManager {
     private void handleStopFailure(String programName, CommandSender sender, Exception e) {
         sender.sendRichMessage(
             "<failure>Failed to stop program <program>: <exception></failure>",
-            plugin.getMessageTheme().getPaletteResolver(),
+            palettes,
             Placeholder.unparsed("program", programName),
             Placeholder.unparsed("exception", e.getMessage())
         );
