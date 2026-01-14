@@ -66,9 +66,6 @@ public class ProcessRunnerCommand implements PluginCommand {
                     })
                 )
                 .then(Commands.literal("reload")
-                    // TODO: it doesn't really make sense that an admin can do everything EXCEPT reload the process runner's configuration
-                    // This should be removed as it's unnecessary and adds more complexity for no reason.
-                    .requires(source -> source.getSender().hasPermission("processrunner.reload"))
                     .executes(context -> {
                         var source = context.getSource();
                         plugin.reloadConfigs(source);
@@ -78,26 +75,11 @@ public class ProcessRunnerCommand implements PluginCommand {
     }
 
     public Permission permission() {
-        var root = permissionNode();
-        var reload = root + ".reload";
-
-        var process = new Permission(
-            root,
+        return new Permission(
+            permissionNode(),
             "Allows access to process management commands",
-            PermissionDefault.OP,
-            Map.of(reload, true)
-        );
-
-        var reloadPerm = new Permission(
-            reload,
-            "Allows reloading process manager configuration",
             PermissionDefault.OP
         );
-
-        // Explicitly link child -> parent (important for registration order safety)
-        reloadPerm.addParent(process, true);
-
-        return process;
     }
 
     public String permissionNode() {
