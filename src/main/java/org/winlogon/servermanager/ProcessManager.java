@@ -363,7 +363,7 @@ public class ProcessManager {
     }
 
     private void sendSuccessMessage(CommandSender sender, String message) {
-        sender.sendRichMessage("<success>" + message + "</success>", plugin.getMessageTheme().getPaletteResolver());
+        sender.sendRichMessage("<success>" + message + "</success>", palettes);
     }
 
     private void handleStartupFailure(String programName, CommandSender sender, Exception e, String context) {
