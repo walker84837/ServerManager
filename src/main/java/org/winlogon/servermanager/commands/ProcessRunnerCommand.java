@@ -12,8 +12,6 @@ import org.bukkit.permissions.PermissionDefault;
 import org.winlogon.servermanager.PluginCommand;
 import org.winlogon.servermanager.ServerManagerPlugin;
 
-import java.util.Map;
-
 public class ProcessRunnerCommand implements PluginCommand {
     private final ServerManagerPlugin plugin;
     public ProcessRunnerCommand(ServerManagerPlugin plugin) {
@@ -22,7 +20,6 @@ public class ProcessRunnerCommand implements PluginCommand {
 
     @Override
     public LiteralArgumentBuilder<CommandSourceStack> createCommand() {
-        // TODO: shorten .suggests and .executes chain using interface methods
         return Commands.literal("process")
                 .requires(this::hasPermission)
                 .then(Commands.literal("start")
@@ -34,11 +31,11 @@ public class ProcessRunnerCommand implements PluginCommand {
                         .executes(context -> {
                             var programName = context.getArgument("program", String.class);
                             var source = context.getSource();
-                        
+
                             plugin.getProcessesExecutor().submit(() -> {
                                 plugin.getProcessManager().startProcess(programName, source.getSender());
                             });
-                        
+
                             return Command.SINGLE_SUCCESS;
                         })
                     )
@@ -52,8 +49,8 @@ public class ProcessRunnerCommand implements PluginCommand {
                         .executes(context -> {
                             var programName = context.getArgument("program", String.class);
                             var source = context.getSource();
-                        
-                            plugin.getProcessManager().stopProcess(programName, source.getSender());
+
+                            plugin.getProcessManager().stopProcessAsync(programName, source.getSender());
                             return Command.SINGLE_SUCCESS;
                         })
                     )

@@ -26,9 +26,7 @@ public class CronJobManager {
     }
 
     public void startScheduler() {
-        if (scheduler == null) {
-            return;
-        }
+        if (scheduler == null) return;
 
         try {
             if (scheduler.isStarted()) {
@@ -49,9 +47,7 @@ public class CronJobManager {
     }
 
     public void shutdownScheduler() {
-        if (scheduler == null) {
-            return;
-        }
+        if (scheduler == null) return;
 
         try {
             if (scheduler.isShutdown()) {

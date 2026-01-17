@@ -41,9 +41,11 @@ public class DiscordWebhookSender {
             .thenAccept(response -> {
                 int code = response.statusCode();
 
-                if (code / 100 != 2) {
+                if (code / 100 != 2) { // Is the code a 2xx status code?
+                    // Not a 2xx code, likely failure
                     logger.log(Level.SEVERE, "Failed to send Discord webhook message. Response Code: " + code + ", Response: " + response.body());
                 } else {
+                    // Success
                     logger.fine("Discord webhook message sent successfully.");
                 }
             })

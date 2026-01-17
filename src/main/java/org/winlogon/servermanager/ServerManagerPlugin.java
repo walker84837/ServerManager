@@ -9,9 +9,6 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 
 import lombok.Getter;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-
 import org.bukkit.plugin.java.JavaPlugin;
 import org.quartz.SchedulerException;
 import org.winlogon.servermanager.config.CronConfig;
@@ -155,6 +152,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         }
     }
 
+    // Loads service configurations from YAML files in the services directory
     private void loadServiceConfigs() {
         serviceConfigs.clear();
         var servicesFolder = getDataFolder().toPath().resolve("services");
@@ -182,6 +180,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         }
     }
 
+    // Loads cron job configurations from YAML files in the cron directory
     private void loadCronConfigs() {
         var cronFolder = getDataFolder().toPath().resolve("cron");
 
@@ -192,6 +191,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
             return;
         }
 
+        // Collect all cron config files from the cron directory
         List<CronConfig> cronConfigs = new ArrayList<>();
         try (var paths = Files.list(cronFolder)) {
             cronConfigs.addAll(paths
