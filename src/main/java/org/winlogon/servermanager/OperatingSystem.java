@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 public class OperatingSystem {
     private static Logger logger = Logger.getLogger(OperatingSystem.class.getName());
@@ -59,7 +58,7 @@ public class OperatingSystem {
 
             try {
                 if (!Files.exists(osRelease)) {
-                    logger.fine("/etc/os-release not found");
+                    logger.log(Level.FINE, "/etc/os-release not found");
                     return UNKNOWN;
                 }
                 content = Files.readString(osRelease, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
@@ -98,12 +97,34 @@ public class OperatingSystem {
                             .getPackageManager()
                             .getInstallCommand(packageName)
             );
-            case WINDOWS -> isOnPath("choco")
-                    ? Optional.of("choco install " + packageName + " -y")
-                    : Optional.empty();
-            case MACOS -> isOnPath("brew")
-                    ? Optional.of("brew install " + packageName)
-                    : Optional.empty();
+
+            case WINDOWS -> {
+                if (isOnPath("winget")) {
+                    yield Optional.of("winget install --id " + packageName);
+                }
+                if (isOnPath("choco")) {
+                    yield Optional.of("choco install " + packageName + " -y");
+                }
+                logger.warning("""
+                        No supported Windows package manager found.
+                        Install one of the following:
+                          - winget: https://learn.microsoft.com/windows/package-manager/winget/
+                          - chocolatey (choco): https://chocolatey.org/install
+                        """);
+                yield Optional.empty();
+            }
+
+            case MACOS -> {
+                if (isOnPath("brew")) {
+                    yield Optional.of("brew install " + packageName);
+                }
+                logger.warning("""
+                    Homebrew was not found on PATH.
+                    Install it from https://brew.sh/
+                    """);
+                yield Optional.empty();
+            }
+
             default -> Optional.empty();
         };
     }
@@ -122,7 +143,7 @@ public class OperatingSystem {
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                reader.lines().forEach(line -> logger.info(line));
+                reader.lines().forEach(logger::info);
             }
 
             int exitCode = process.waitFor();
