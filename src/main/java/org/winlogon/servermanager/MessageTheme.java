@@ -6,6 +6,8 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.Tag;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.minimessage.tag.standard.StandardTags;
+import net.kyori.adventure.text.format.Style;
+import net.kyori.adventure.text.format.TextDecoration;
 
 import org.winlogon.servermanager.config.PaletteConfig;
 
@@ -23,6 +25,8 @@ public class MessageTheme {
             .tag("placeholder", Tag.styling(palette.placeholder))
             .tag("success", Tag.styling(palette.success))
             .tag("failure", Tag.styling(palette.failure))
+            .tag("warning", Tag.styling(palette.warning))
+            .tag("details", Tag.styling(builder -> builder.color(palette.details).decorate(TextDecoration.BOLD)))
             .build();
 
         var resolver = TagResolver.builder()

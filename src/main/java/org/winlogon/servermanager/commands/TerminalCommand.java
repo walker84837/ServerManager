@@ -76,7 +76,7 @@ public class TerminalCommand implements PluginCommand {
 
         CompletableFuture.runAsync(() -> {
             try {
-                Process process = new ProcessBuilder(command.split(" ")).redirectErrorStream(true).start();
+                Process process = createShellProcess(command).start();
                 String output = readProcessOutput(process.getInputStream());
                 int exitCode = process.waitFor();
 
@@ -112,6 +112,14 @@ public class TerminalCommand implements PluginCommand {
         }, commandExecutor);
 
         return Command.SINGLE_SUCCESS;
+    }
+
+    private ProcessBuilder createShellProcess(String command) {
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        String[] shellCmd = isWindows
+                ? new String[]{"cmd", "/c", command}
+                : new String[]{"/bin/sh", "-c", command};
+        return new ProcessBuilder(shellCmd).redirectErrorStream(true);
     }
 
     private String readProcessOutput(InputStream inputStream) throws IOException {

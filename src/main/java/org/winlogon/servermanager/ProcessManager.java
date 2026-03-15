@@ -111,7 +111,7 @@ public class ProcessManager {
     private void executePreLaunchCommands(String programName, ServiceConfig config) throws IOException, InterruptedException {
         for (var cmd : config.preLaunchCommands) {
             logger.info("Executing pre-launch command for " + programName + ": " + cmd);
-            new ProcessBuilder(cmd.split(" ")).start().waitFor();
+            executeShellCommand(cmd);
         }
     }
 
@@ -184,7 +184,7 @@ public class ProcessManager {
         for (String cmd : config.afterDeathCommands) {
             logger.info("Executing after-death command for " + programName + ": " + cmd);
             try {
-                new ProcessBuilder(cmd.split(" ")).start().waitFor();
+                executeShellCommand(cmd);
             } catch (IOException | InterruptedException e) {
                 logger.severe("Error executing after-death command for " + programName + ": " + e.getMessage());
                 if (e instanceof InterruptedException) {
@@ -194,6 +194,15 @@ public class ProcessManager {
         }
     }
 
+    private void executeShellCommand(String command) throws IOException, InterruptedException {
+        var osType = org.winlogon.servermanager.OperatingSystem.Type.detect();
+        String[] args = osType == org.winlogon.servermanager.OperatingSystem.Type.WINDOWS
+                ? new String[]{"cmd", "/c", command}
+                : new String[]{"/bin/sh", "-c", command};
+
+        new ProcessBuilder(args).start().waitFor();
+    }
+
     // Restarts the process if auto-restart is enabled in config
     private void handleAutoRestart(String programName, ServiceConfig config, CommandSender sender) {
         if (!config.autoRestart) return;
@@ -201,7 +210,7 @@ public class ProcessManager {
         logger.info("Auto-restarting program: " + programName);
 
         plugin.getSchedulerAdapter().runNow(() -> {
-            sendWarningMessage(sender, "Auto-restarting program: <gold><program></gold>", programName);
+            sendWarningMessage(sender, "Auto-restarting program: <warning><program></warning>", programName);
         });
 
         plugin.getSchedulerAdapter().runLater(() -> startProcess(programName, sender), Duration.ofSeconds(5));
@@ -248,8 +257,7 @@ public class ProcessManager {
 
     public void listProcesses(CommandSourceStack source) {
         var runningProcessEntries = runningProcesses.entrySet().stream()
-            // TODO: <green> here doesn't take into consideration any of the color types defined in the palette
-            .map(entry -> "  - <green>" + entry.getKey() + " (PID: " + entry.getValue().pid() + ")</green>")
+            .map(entry -> "  - <success>" + entry.getKey() + " (PID: " + entry.getValue().pid() + ")</success>")
             .collect(Collectors.joining("\n"));
 
         var availablePrograms = serviceConfigs.keySet().stream()

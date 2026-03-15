@@ -14,6 +14,12 @@ import org.winlogon.servermanager.ServerManagerPlugin;
 
 public class ProcessRunnerCommand implements PluginCommand {
     private final ServerManagerPlugin plugin;
+    private final Permission perm = new Permission(
+        permissionNode(),
+        "Allows access to process management commands",
+        PermissionDefault.OP
+    );
+
     public ProcessRunnerCommand(ServerManagerPlugin plugin) {
         this.plugin = plugin;
     }
@@ -71,14 +77,12 @@ public class ProcessRunnerCommand implements PluginCommand {
                 );
     }
 
+    @Override
     public Permission permission() {
-        return new Permission(
-            permissionNode(),
-            "Allows access to process management commands",
-            PermissionDefault.OP
-        );
+        return perm;
     }
 
+    @Override
     public String permissionNode() {
         return "servermanager.command.process";
     }

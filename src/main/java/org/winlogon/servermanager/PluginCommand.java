@@ -10,7 +10,7 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 
 public interface PluginCommand {
     /**
-     * Builds a command (...)
+     * Builds a command argument builder for brigadier command registration.
      * @return the built command
      */
     LiteralArgumentBuilder<CommandSourceStack> createCommand();

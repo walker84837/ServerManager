@@ -23,3 +23,5 @@ palette:
   placeholder: "gray"
   success: "green"
   failure: "red"
+  warning: "yellow"
+  details: "dark_aqua"

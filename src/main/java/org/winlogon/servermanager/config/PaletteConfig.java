@@ -25,6 +25,12 @@ public class PaletteConfig {
     @Comment("Failure color")
     public NamedTextColor failure = NamedTextColor.RED;
 
+    @Comment("Warning color for alerts and warnings")
+    public NamedTextColor warning = NamedTextColor.YELLOW;
+
+    @Comment("Details color for technical labels")
+    public NamedTextColor details = NamedTextColor.DARK_AQUA;
+
     public PaletteConfig() {
     }
 }

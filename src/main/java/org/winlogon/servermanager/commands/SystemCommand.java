@@ -101,7 +101,7 @@ public class SystemCommand implements PluginCommand {
             }
 
             try {
-                Process process = new ProcessBuilder(installCommand.get().split(" ")).redirectErrorStream(true).start();
+                Process process = createShellProcess(installCommand.get()).start();
 
                 String output;
                 try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -176,7 +176,7 @@ public class SystemCommand implements PluginCommand {
     private int checkStorageUsage(CommandContext<CommandSourceStack> context) {
         var sender = context.getSource().getSender();
 
-        sender.sendRichMessage("<gold>=== Storage Usage ===</gold>");
+        sender.sendRichMessage("<secondary>=== Storage Usage ===</secondary>", plugin.getMessageTheme().getPaletteResolver());
 
         var roots = File.listRoots();
         for (var root : roots) {
@@ -189,11 +189,12 @@ public class SystemCommand implements PluginCommand {
 
                 sender.sendRichMessage(
                     """
-                    <aqua>Drive: <path></aqua>
-                      <white>Total: <total></white>
-                      <green>Used: <used></green>
-                      <yellow>Available: <avail></yellow>
+                    <details>Drive: <path></details>
+                      <foreground>Total: <total></foreground>
+                      <success>Used: <used></success>
+                      <secondary>Available: <avail></secondary>
                     """,
+                    plugin.getMessageTheme().getPaletteResolver(),
                     Placeholder.unparsed("path", root.getAbsolutePath()),
                     Placeholder.unparsed("total", FormatUtil.formatBytes(totalSpace)),
                     Placeholder.unparsed("used", FormatUtil.formatBytes(usedSpace)),
@@ -201,7 +202,8 @@ public class SystemCommand implements PluginCommand {
                 );
             } catch (Exception e) {
                 sender.sendRichMessage(
-                    "<red>Error checking storage for <path>: <err></red>",
+                    "<failure>Error checking storage for <path>: <err></failure>",
+                    plugin.getMessageTheme().getPaletteResolver(),
                     Placeholder.unparsed("path", root.getAbsolutePath()),
                     Placeholder.unparsed("err", e.getMessage())
                 );
@@ -217,87 +219,101 @@ public class SystemCommand implements PluginCommand {
         var source = context.getSource();
         var sender = source.getSender();
 
-        // yellow -> GOLD for placeholder
         sender.sendRichMessage(
-            "<yellow>Executing shell command: <cmd></yellow>",
+            "<secondary>Executing shell command: <cmd></secondary>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("cmd", command)
         );
 
         CompletableFuture.runAsync(() -> {
+            Process process = null;
             try {
-                Process process = new ProcessBuilder(command.split(" ")).redirectErrorStream(true).start();
+                process = createShellProcess(command).start();
 
-                var reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                var output = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+                String output;
+                try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    output = reader.lines().collect(java.util.stream.Collectors.joining("\n"));
                 }
 
                 int exitCode = process.waitFor();
 
                 if (exitCode == 0) {
-                    sender.sendRichMessage("<green>Command executed successfully. Output:</green>");
+                    sender.sendRichMessage("<success>Command executed successfully. Output:</success>", plugin.getMessageTheme().getPaletteResolver());
                     sender.sendRichMessage(
-                        "<white><out></white>",
-                        Placeholder.unparsed("out", output.toString())
+                        "<foreground><out></foreground>",
+                        plugin.getMessageTheme().getPaletteResolver(),
+                        Placeholder.unparsed("out", output)
                     );
                 } else {
-                    var errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-                    var errorOutput = new StringBuilder();
-                    while ((line = errorReader.readLine()) != null) {
-                        errorOutput.append(line).append("\n");
+                    String errorOutput;
+                    try (var errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                        errorOutput = errorReader.lines().collect(java.util.stream.Collectors.joining("\n"));
                     }
                     sender.sendRichMessage(
-                        "<red>Command failed with exit code <exit-code>. Error:</red>",
+                        "<failure>Command failed with exit code <exit-code>. Error:</failure>",
+                        plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
-                        "<red><err></red>",
-                        Placeholder.unparsed("err", errorOutput.toString())
+                        "<failure><err></failure>",
+                        plugin.getMessageTheme().getPaletteResolver(),
+                        Placeholder.unparsed("err", errorOutput)
                     );
                 }
 
             } catch (Exception e) {
                 sender.sendRichMessage(
-                    "<red>Error executing shell command: <error></red>",
+                    "<failure>Error executing shell command: <error></failure>",
+                    plugin.getMessageTheme().getPaletteResolver(),
                     Placeholder.unparsed("error", e.getMessage())
                 );
                 plugin.getLogger().severe("Error executing shell command: " + e.getMessage());
+            } finally {
+                if (process != null && process.isAlive()) {
+                    process.destroy();
+                }
             }
         }, commandExecutor);
 
         return Command.SINGLE_SUCCESS;
     }
 
+    private ProcessBuilder createShellProcess(String command) {
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        String[] shellCmd = isWindows
+                ? new String[]{"cmd", "/c", command}
+                : new String[]{"/bin/sh", "-c", command};
+        return new ProcessBuilder(shellCmd).redirectErrorStream(true);
+    }
+
     private int systemHealth(CommandContext<CommandSourceStack> context) {
         var sender = context.getSource().getSender();
 
-        sender.sendRichMessage("<gold>=== System Health ===</gold>");
+        sender.sendRichMessage("<secondary>=== System Health ===</secondary>", plugin.getMessageTheme().getPaletteResolver());
 
-        // aqua -> placeholders use DARK_AQUA
         sender.sendRichMessage(
-            "<aqua>OS: <family> <version></aqua>",
+            "<details>OS: <family> <version></details>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("family", os.getFamily()),
             Placeholder.unparsed("version", os.getVersionInfo().toString())
         );
 
         sender.sendRichMessage(
-            "<aqua>CPU: <cpu></aqua>",
+            "<details>CPU: <cpu></details>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("cpu", hardware.getProcessor().getProcessorIdentifier().getName())
         );
 
-        // RAM Usage
         long totalMemory = hardware.getMemory().getTotal();
         long availableMemory = hardware.getMemory().getAvailable();
         long usedMemory = totalMemory - availableMemory;
         sender.sendRichMessage(
-            "<aqua>RAM Used: <used> / <total></aqua>",
+            "<details>RAM Used: <used> / <total></details>",
+            plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("used", FormatUtil.formatBytes(usedMemory)),
             Placeholder.unparsed("total", FormatUtil.formatBytes(totalMemory))
         );
 
-        // CPU Load
         double[] loadAverage = hardware.getProcessor().getSystemLoadAverage(3);
         if (loadAverage != null) {
             var stats = String.format(
@@ -307,19 +323,20 @@ public class SystemCommand implements PluginCommand {
                 loadAverage[2]
             );
             sender.sendRichMessage(
-                "<aqua>CPU Load Average (1m, 5m, 15m): <stats></aqua>",
+                "<details>CPU Load Average (1m, 5m, 15m): <stats></details>",
+                plugin.getMessageTheme().getPaletteResolver(),
                 Placeholder.unparsed("stats", stats)
             );
         }
 
         var runningProcesses = plugin.getProcessManager().getRunningProcesses();
-        // Running Processes (managed by plugin)
-        sender.sendRichMessage("<gold>Managed Processes:</gold>");
+        sender.sendRichMessage("<secondary>Managed Processes:</secondary>", plugin.getMessageTheme().getPaletteResolver());
         if (runningProcesses.isEmpty()) {
-            sender.sendRichMessage("<gray>  No managed processes running.</gray>");
+            sender.sendRichMessage("<placeholder>  No managed processes running.</placeholder>", plugin.getMessageTheme().getPaletteResolver());
         } else {
             runningProcesses.forEach((name, handle) -> sender.sendRichMessage(
-                "<green>  - <proc> (PID: <pid>)</green>",
+                "<success>  - <proc> (PID: <pid>)</success>",
+                plugin.getMessageTheme().getPaletteResolver(),
                 Placeholder.unparsed("proc", name),
                 Placeholder.unparsed("pid", String.valueOf(handle.pid()))
             ));
