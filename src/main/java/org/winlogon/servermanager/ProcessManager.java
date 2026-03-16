@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -107,7 +108,7 @@ public class ProcessManager {
         }
     }
 
-    // Runs configured commands before launching a process
+    /** Runs configured commands before launching a process */
     private void executePreLaunchCommands(String programName, ServiceConfig config) throws IOException, InterruptedException {
         for (var cmd : config.preLaunchCommands) {
             logger.info("Executing pre-launch command for " + programName + ": " + cmd);
@@ -115,7 +116,7 @@ public class ProcessManager {
         }
     }
 
-    // Builds process builder and starts the process from config
+    /** Builds process builder and starts the process from config */
     private Process createAndStartProcess(ServiceConfig config) throws IOException {
         var processBuilder = new ProcessBuilder();
 
@@ -132,41 +133,35 @@ public class ProcessManager {
         return processBuilder.start();
     }
 
-    // Schedules a timer to kill the process after its configured duration
+    /** Schedules a timer to kill the process after its configured duration */
     private void scheduleDurationBasedKill(String programName, ServiceConfig config, ProcessHandle handle, CommandSender sender) {
         if (config.duration <= 0) return;
 
         monitorExecutor.schedule(() -> {
             if (handle.isAlive()) {
-                logger.info("Program " + programName + " reached its duration limit. Sending " + config.killSignal);
-                sendKillSignal(handle, config.killSignal);
+                logger.info("Program " + programName + " reached its duration limit. Sending " + config.killMode + " kill signal.");
+                sendKillSignal(config, handle);
                 sendWarningMessage(sender, "Program <program> reached its duration limit and was terminated.", programName);
             }
         }, config.duration, config.durationUnit);
     }
 
-    // TODO: there should be just forcibly and a "soft close" signal (e.g. SIGKILL vs SIGTERM on Linux). The signal handling is OS-dependent and this isn't intended.
-    private void sendKillSignal(ProcessHandle handle, String signal) {
-        var osType = org.winlogon.servermanager.OperatingSystem.Type.detect();
+    private void sendKillSignal(ServiceConfig config, ProcessHandle handle) {
         try {
-            if (osType == org.winlogon.servermanager.OperatingSystem.Type.LINUX || osType == org.winlogon.servermanager.OperatingSystem.Type.MACOS) {
-                new ProcessBuilder("kill", "-" + signal, String.valueOf(handle.pid())).start().waitFor();
-            } else if (osType == org.winlogon.servermanager.OperatingSystem.Type.WINDOWS) {
-                new ProcessBuilder("taskkill", "/PID", String.valueOf(handle.pid()), "/F").start().waitFor();
-            } else {
+            if ("FORCE".equalsIgnoreCase(config.killMode)) {
+                handle.destroyForcibly();
+            } else if ("SOFT".equalsIgnoreCase(config.killMode)) {
                 handle.destroy();
+            } else {
+                logger.warning("Config option for kill mode is invalid. Please set either `soft` or `force`.");
             }
-        } catch (IOException | InterruptedException e) {
-            logger.severe("Failed to send kill signal " + signal + " to process " + handle.pid() + ": " + e.getMessage());
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            // Fallback to destroy()
-            handle.destroy();
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Failed to kill process " + handle.pid() + ": " + e.getMessage(), e);
+            handle.destroyForcibly();
         }
     }
 
-    // Sets up callback to handle process exit, run after-death commands, and auto-restart
+    /** Sets up callback to handle process exit, run after-death commands, and auto-restart */
     private void setupProcessCompletionHandler(String programName, ServiceConfig config, Process process, CommandSender sender) {
         CompletableFuture<Void> future = process.onExit().thenAccept(p -> {
             runningProcesses.remove(programName);
@@ -179,14 +174,14 @@ public class ProcessManager {
         processFutures.put(programName, future);
     }
 
-    // Runs configured commands after a process terminates
+    /** Runs configured commands after a process terminates */
     private void executeAfterDeathCommands(String programName, ServiceConfig config) {
         for (String cmd : config.afterDeathCommands) {
             logger.info("Executing after-death command for " + programName + ": " + cmd);
             try {
                 executeShellCommand(cmd);
             } catch (IOException | InterruptedException e) {
-                logger.severe("Error executing after-death command for " + programName + ": " + e.getMessage());
+                logger.log(Level.SEVERE, "Error executing after-death command for " + programName + ": " + e.getMessage(), e);
                 if (e instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
@@ -203,7 +198,7 @@ public class ProcessManager {
         new ProcessBuilder(args).start().waitFor();
     }
 
-    // Restarts the process if auto-restart is enabled in config
+    /** Restarts the process if auto-restart is enabled in config */
     private void handleAutoRestart(String programName, ServiceConfig config, CommandSender sender) {
         if (!config.autoRestart) return;
 
@@ -239,7 +234,7 @@ public class ProcessManager {
             );
     }
 
-    // Destroys the process handle and waits for completion
+    /** Destroys the process handle and waits for completion */
     private void stopProcessInternal(String programName, ProcessHandle handle, CommandSender sender) {
         try {
             handle.destroy();
@@ -256,17 +251,19 @@ public class ProcessManager {
     }
 
     public void listProcesses(CommandSourceStack source) {
+        var newlineCollector = Collectors.joining("\n");
+
         var runningProcessEntries = runningProcesses.entrySet().stream()
             .map(entry -> "  - <success>" + entry.getKey() + " (PID: " + entry.getValue().pid() + ")</success>")
-            .collect(Collectors.joining("\n"));
+            .collect(newlineCollector);
 
         var availablePrograms = serviceConfigs.keySet().stream()
             .map(programName -> {
                 boolean isRunning = runningProcesses.containsKey(programName);
                 String status = isRunning ? "<success>[RUNNING]</success>" : "<failure>[STOPPED]</failure>";
-                return "  - " + programName + status;
+                return "  - " + programName + " " + status;
             })
-            .collect(Collectors.joining("\n"));
+            .collect(newlineCollector);
 
         var message = """
             <secondary>=== Running Processes ===</secondary>
@@ -326,9 +323,10 @@ public class ProcessManager {
     }
 
     private void killMemoryHeavyProcess(MemoryUsageSnapshot snapshot) {
-        logger.warning("Total memory usage (" +
-            (snapshot.totalMemoryUsage / (1024 * 1024)) + " MB) exceeds limit (" +
-            mainConfig.totalMemoryLimitMB + " MB). Initiating OOM kill.");
+        var memUsage = snapshot.totalMemoryUsage / (1024 * 1024);
+        var totalMem = mainConfig.totalMemoryLimitMB;
+
+        logger.warning("Total memory usage (" + memUsage + " MB) exceeds limit (" + totalMem + " MB). Initiating OOM kill.");
 
         // Select the process with the highest OOM "badness" score
         // (RSS + virtual memory), i.e. the biggest overall memory offender.
@@ -342,7 +340,7 @@ public class ProcessManager {
         );
     }
 
-    // Forcibly terminates a process by name
+    /** Forcibly terminates a process by name */
     private void killProcess(String programName) {
         Optional.ofNullable(runningProcesses.get(programName)).ifPresent(victimHandle -> {
             logger.severe("OOM Killer: Killing process " + programName +
@@ -355,7 +353,7 @@ public class ProcessManager {
         });
     }
 
-    // Calculates OOM "badness" score based on RSS and virtual memory
+    /** Calculates OOM "badness" score based on RSS and virtual memory */
     private long calculateOOMBadness(OSProcess process) {
         return process.getResidentSetSize() + process.getVirtualSize();
     }
@@ -372,7 +370,7 @@ public class ProcessManager {
         }, 30, 30, TimeUnit.SECONDS);
     }
 
-    // Handles unexpected process termination and logs auto-restart intentions
+    /** Handles unexpected process termination and logs auto-restart intentions */
     private void handleUnexpectedTermination(String programName) {
         logger.warning("Process '" + programName + "' terminated unexpectedly");
         Optional.ofNullable(serviceConfigs.get(programName))
@@ -380,26 +378,26 @@ public class ProcessManager {
             .ifPresent(config -> logger.info("Program '" + programName + "' terminated unexpectedly. Auto-restart will be attempted."));
     }
 
-    // Helper methods for consistent messaging
+    /** Helper methods for consistent messaging */
     private void sendErrorMessage(CommandSender sender, String message, String programName) {
         sender.sendRichMessage("<failure>" + message + "</failure>",
             palettes, Placeholder.unparsed("program", programName)
         );
     }
 
-    // Sends a warning message with the configured palette styling
+    /** Sends a warning message with the configured palette styling */
     private void sendWarningMessage(CommandSender sender, String message, String programName) {
         sender.sendRichMessage("<primary>" + message + "</primary>",
             palettes, Placeholder.unparsed("program", programName)
         );
     }
 
-    // Sends a success message with the configured palette styling
+    /** Sends a success message with the configured palette styling */
     private void sendSuccessMessage(CommandSender sender, String message) {
         sender.sendRichMessage("<success>" + message + "</success>", palettes);
     }
 
-    // Handles errors during process startup and sends error message to sender
+    /** Handles errors during process startup and sends error message to sender */
     private void handleStartupFailure(String programName, CommandSender sender, Exception e, String context) {
         sender.sendRichMessage(
             "<failure>" + context + " '<program>': " + e.getMessage() + "</failure>",
@@ -408,7 +406,7 @@ public class ProcessManager {
         logger.severe(context + " '" + programName + "': " + e.getMessage());
     }
 
-    // Handles errors during process stop and sends error message to sender
+    /** Handles errors during process stop and sends error message to sender */
     private void handleStopFailure(String programName, CommandSender sender, Exception e) {
         sender.sendRichMessage(
             "<failure>Failed to stop program <program>: <exception></failure>",
@@ -418,6 +416,6 @@ public class ProcessManager {
         logger.severe("Failed to stop program '" + programName + "': " + e.getMessage());
     }
 
-    // Record holding memory usage snapshot for OOM killer calculations
+    /** Record holding memory usage snapshot for OOM killer calculations */
     private record MemoryUsageSnapshot(long totalMemoryUsage, Map<String, OSProcess> osProcesses) {}
 }

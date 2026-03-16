@@ -26,8 +26,8 @@ public class ServiceConfig {
     @Comment("Time unit for the duration (SECONDS, MINUTES, HOURS, DAYS)")
     public TimeUnit durationUnit = TimeUnit.MINUTES;
 
-    @Comment("Signal to send to kill the program (e.g., SIGTERM, SIGKILL)")
-    public String killSignal = "SIGTERM";
+    @Comment("Kill mode: SOFT (graceful termination) or FORCE (immediate termination)")
+    public String killMode = "SOFT";
 
     @Comment("Commands to run after the program terminates")
     public List<String> afterDeathCommands = List.of();
