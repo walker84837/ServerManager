@@ -213,7 +213,10 @@ public final class ServerManagerPlugin extends JavaPlugin {
      * @param message The message to send
      */
     public void sendDiscordMessage(String message) {
-        discordWebhookSender.ifPresentOrElse(sender -> sender.sendMessage(message), () -> logger.warning(message));
+        discordWebhookSender.ifPresentOrElse(
+            sender -> sender.sendMessage(message),
+            () -> logger.warning("Tried to send message but webhooks are disabled" + message)
+        );
     }
 
     public void reloadConfigs(CommandSourceStack source) {

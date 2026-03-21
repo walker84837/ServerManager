@@ -56,7 +56,7 @@ public class DiscordWebhookSender {
     }
 
     private static String escapeJson(String text) {
-        var sb = new StringBuilder();
+        var sb = new StringBuilder(text.length());
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             switch (c) {

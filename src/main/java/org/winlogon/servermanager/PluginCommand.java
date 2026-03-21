@@ -1,6 +1,5 @@
 package org.winlogon.servermanager;
 
-import org.bukkit.command.CommandSender;
 import org.bukkit.permissions.Permission;
 import org.bukkit.plugin.Plugin;
 
@@ -34,15 +33,6 @@ public interface PluginCommand {
      */
     default boolean hasPermission(CommandSourceStack source) {
         return source.getSender().hasPermission(permission());
-    }
-
-    /**
-     * Checks whether the player running the command has enough permissions to run this command
-     * @param sender The command runner
-     * @return whether the player is allowed to run this command
-     */
-    default boolean hasPermission(CommandSender sender) {
-        return sender.hasPermission(permission());
     }
 
     /**

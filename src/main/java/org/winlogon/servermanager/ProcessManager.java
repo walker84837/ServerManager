@@ -142,6 +142,7 @@ public class ProcessManager {
                 logger.info("Program " + programName + " reached its duration limit. Sending " + config.killMode + " kill signal.");
                 sendKillSignal(config, handle);
                 sendWarningMessage(sender, "Program <program> reached its duration limit and was terminated.", programName);
+                plugin.sendDiscordMessage("Process '" + programName + "' reached its duration limit and was terminated.");
             }
         }, config.duration, config.durationUnit);
     }
@@ -345,6 +346,7 @@ public class ProcessManager {
         Optional.ofNullable(runningProcesses.get(programName)).ifPresent(victimHandle -> {
             logger.severe("OOM Killer: Killing process " + programName +
                 " (PID: " + victimHandle.pid() + ") due to excessive memory usage.");
+            plugin.sendDiscordMessage("OOM Killer: Killed process '" + programName + "' (PID: " + victimHandle.pid() + ") due to excessive memory usage.");
             victimHandle.destroyForcibly();
 
             plugin.getSchedulerAdapter().runNow(() -> {
@@ -373,6 +375,7 @@ public class ProcessManager {
     /** Handles unexpected process termination and logs auto-restart intentions */
     private void handleUnexpectedTermination(String programName) {
         logger.warning("Process '" + programName + "' terminated unexpectedly");
+        plugin.sendDiscordMessage("Process '" + programName + "' terminated unexpectedly");
         Optional.ofNullable(serviceConfigs.get(programName))
             .filter(config -> config.autoRestart)
             .ifPresent(config -> logger.info("Program '" + programName + "' terminated unexpectedly. Auto-restart will be attempted."));
@@ -404,6 +407,7 @@ public class ProcessManager {
             palettes, Placeholder.unparsed("program", programName)
         );
         logger.severe(context + " '" + programName + "': " + e.getMessage());
+        plugin.sendDiscordMessage("Failed to start '" + programName + "': " + e.getMessage());
     }
 
     /** Handles errors during process stop and sends error message to sender */
@@ -414,6 +418,7 @@ public class ProcessManager {
             Placeholder.unparsed("exception", e.getMessage())
         );
         logger.severe("Failed to stop program '" + programName + "': " + e.getMessage());
+        plugin.sendDiscordMessage("Failed to stop '" + programName + "': " + e.getMessage());
     }
 
     /** Record holding memory usage snapshot for OOM killer calculations */
