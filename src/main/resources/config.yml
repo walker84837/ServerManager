@@ -25,3 +25,25 @@ palette:
   failure: "red"
   warning: "yellow"
   details: "dark_aqua"
+
+# Paste service for long command output
+pasteService:
+  # Maximum output length in characters before truncation (0 = unlimited)
+  maxOutputLength: 5000
+  upload:
+    # Paste service endpoint URL. Leave empty to disable upload (falls back to file).
+    url: "https://paste.myst.rs/api/v3/paste"
+    # HTTP method (default: POST)
+    method: "POST"
+    # Request body format: json, text, or multipart
+    format: "json"
+    # Additional HTTP headers
+    headers:
+      Content-Type: "application/json"
+    # Request body template. Use {content} as placeholder for the paste content.
+    body: '{"expiresIn": "1d", "pasties": [{"title": "output.txt", "language": "text", "code": "{content}"}]}'
+    # jq expression to extract the paste URL or ID from the response JSON.
+    # Leave empty to use the entire response body as the URL.
+    selector: "._id"
+    # Template to build the final URL from the extracted value.
+    urlTemplate: "https://paste.myst.rs/{result}"

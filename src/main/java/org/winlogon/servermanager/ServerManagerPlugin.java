@@ -9,6 +9,9 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 
 import lombok.Getter;
 
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.quartz.SchedulerException;
 import org.winlogon.servermanager.config.CronConfig;
@@ -16,6 +19,7 @@ import org.winlogon.servermanager.config.ServerManagerConfig;
 import org.winlogon.servermanager.config.ServiceConfig;
 import org.winlogon.servermanager.cron.CronJobManager;
 import org.winlogon.servermanager.discord.DiscordWebhookSender;
+import org.winlogon.servermanager.discord.PastebinUploader;
 import org.winlogon.servermanager.platform.SchedulerAdapter;
 
 import oshi.SystemInfo;
@@ -52,6 +56,8 @@ public final class ServerManagerPlugin extends JavaPlugin {
     private final ScheduledExecutorService monitorExecutor = Executors.newScheduledThreadPool(1);
     @Getter
     private final ExecutorService processesExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+    private PastebinUploader pastebinUploader;
 
     @Getter
     private ProcessManager processManager;
@@ -217,6 +223,64 @@ public final class ServerManagerPlugin extends JavaPlugin {
             sender -> sender.sendMessage(message),
             () -> logger.warning("Tried to send message but webhooks are disabled" + message)
         );
+    }
+
+    private PastebinUploader getPastebinUploader() {
+        if (pastebinUploader == null) {
+            pastebinUploader = new PastebinUploader(mainConfig.pasteService.upload, getDataFolder().toPath(), logger);
+        }
+        return pastebinUploader;
+    }
+
+    /**
+     * Truncates output if it exceeds the configured max length, then asynchronously
+     * uploads to the paste service or saves to a file. Returns the text to display.
+     */
+    public String handleCommandOutput(String rawOutput, CommandSender sender) {
+        var maxLength = mainConfig.pasteService.maxOutputLength;
+        if (maxLength <= 0 || rawOutput.length() <= maxLength) {
+            return rawOutput;
+        }
+
+        var truncated = rawOutput.substring(0, maxLength)
+            + "\n<warning>... output truncated</warning>";
+
+        processesExecutor.submit(() -> {
+            try {
+                var uploader = getPastebinUploader();
+                if (uploader.isUploadEnabled()) {
+                    uploader.upload(rawOutput).thenAccept(url -> {
+                        if (url != null && url.isPresent()) {
+                            sender.sendRichMessage(
+                                "<placeholder>Full output: <url></placeholder>",
+                                messageTheme.getPaletteResolver(),
+                                Placeholder.unparsed("url", url.get()));
+                        }
+                    }).exceptionally(ex -> {
+                        fallbackSave(rawOutput, sender);
+                        return null;
+                    });
+                } else {
+                    fallbackSave(rawOutput, sender);
+                }
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Failed to handle long output", e);
+            }
+        });
+
+        return truncated;
+    }
+
+    private void fallbackSave(String rawOutput, CommandSender sender) {
+        try {
+            var path = getPastebinUploader().saveToFile(rawOutput);
+            sender.sendRichMessage(
+                "<placeholder>Full output saved to: <path></placeholder>",
+                messageTheme.getPaletteResolver(),
+                Placeholder.unparsed("path", path.toString()));
+        } catch (IOException e) {
+            logger.log(Level.WARNING, "Failed to save long output to file", e);
+        }
     }
 
     public void reloadConfigs(CommandSourceStack source) {

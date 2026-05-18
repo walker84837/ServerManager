@@ -68,6 +68,7 @@ dependencies {
     compileOnly(libs.quartz)
     compileOnly(libs.lombok)
     compileOnly(libs.asynccraftr)
+    compileOnly(libs.jackson.jq)
     annotationProcessor(libs.lombok)
 
     testCompileOnly(libs.lombok)

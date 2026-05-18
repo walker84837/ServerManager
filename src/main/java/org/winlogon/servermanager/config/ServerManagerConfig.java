@@ -23,6 +23,9 @@ public class ServerManagerConfig {
     @Comment("Color palette for message theming")
     public PaletteConfig palette = new PaletteConfig();
 
+    @Comment("Paste service configuration for long command output")
+    public PasteServiceConfig pasteService = new PasteServiceConfig();
+
     public ServerManagerConfig() {
     }
 }

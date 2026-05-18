@@ -29,7 +29,8 @@ public class ServerManagerLoader implements PluginLoader {
             dependency("de.exlll:configlib-paper:4.6.3"),
             dependency("com.github.oshi:oshi-core:6.4.0"),
             dependency("org.quartz-scheduler:quartz:2.3.2"),
-            dependency("org.winlogon:asynccraftr:0.2.0")
+            dependency("org.winlogon:asynccraftr:0.2.0"),
+            dependency("net.thisptr:jackson-jq:1.6.1")
         };
 
         for (var dependency : dependencies) {

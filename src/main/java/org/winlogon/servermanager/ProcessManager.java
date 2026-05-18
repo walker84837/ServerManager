@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -39,6 +40,7 @@ public class ProcessManager {
     private final ServerManagerConfig mainConfig;
     private final Map<String, ServiceConfig> serviceConfigs;
     private final Map<String, ProcessHandle> runningProcesses = new ConcurrentHashMap<>();
+    private final Set<String> pendingStops = ConcurrentHashMap.newKeySet();
     private final ScheduledExecutorService monitorExecutor;
     private final ExecutorService processesExecutor;
     private final Map<String, CompletableFuture<Void>> processFutures = new ConcurrentHashMap<>();
@@ -87,6 +89,7 @@ public class ProcessManager {
 
     // Executes pre-launch commands, creates process, and sets up lifecycle handlers
     private void startProcessInternal(String programName, ServiceConfig config, CommandSender sender) {
+        pendingStops.remove(programName);
         try {
             executePreLaunchCommands(programName, config);
 
@@ -196,12 +199,19 @@ public class ProcessManager {
                 ? new String[]{"cmd", "/c", command}
                 : new String[]{"/bin/sh", "-c", command};
 
-        new ProcessBuilder(args).start().waitFor();
+        // Discard output to prevent pipe-buffer deadlock.
+        // Pre-launch / after-death commands are fire-and-forget — output is not needed.
+        new ProcessBuilder(args)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+            .waitFor();
     }
 
     /** Restarts the process if auto-restart is enabled in config */
     private void handleAutoRestart(String programName, ServiceConfig config, CommandSender sender) {
         if (!config.autoRestart) return;
+        if (pendingStops.remove(programName)) return;
 
         logger.info("Auto-restarting program: " + programName);
 
@@ -209,7 +219,11 @@ public class ProcessManager {
             sendWarningMessage(sender, "Auto-restarting program: <warning><program></warning>", programName);
         });
 
-        plugin.getSchedulerAdapter().runLater(() -> startProcess(programName, sender), Duration.ofSeconds(5));
+        plugin.getSchedulerAdapter().runLater(() -> {
+            if (!pendingStops.contains(programName)) {
+                startProcess(programName, sender);
+            }
+        }, Duration.ofSeconds(5));
     }
 
     /**
@@ -228,6 +242,7 @@ public class ProcessManager {
      * @param sender the command sender to notify about success or failure
      */
     public void stopProcessAsync(String programName, CommandSender sender) {
+        pendingStops.add(programName);
         Optional.ofNullable(runningProcesses.get(programName))
             .ifPresentOrElse(
                 handle -> processesExecutor.submit(() -> stopProcessInternal(programName, handle, sender)),
@@ -282,6 +297,7 @@ public class ProcessManager {
     }
 
     public void stopAllProcesses() {
+        pendingStops.clear();
         runningProcesses.values().forEach(ProcessHandle::destroy);
         runningProcesses.clear();
 

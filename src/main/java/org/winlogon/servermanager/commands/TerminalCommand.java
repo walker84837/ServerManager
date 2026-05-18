@@ -79,6 +79,7 @@ public class TerminalCommand implements PluginCommand {
                 Process process = createShellProcess(command).start();
                 String output = readProcessOutput(process.getInputStream());
                 int exitCode = process.waitFor();
+                output = plugin.handleCommandOutput(output, sender);
 
                 if (exitCode == 0) {
                     sender.sendRichMessage("<success>Command executed successfully. Output:</success>", plugin.getMessageTheme().getPaletteResolver());
@@ -88,16 +89,15 @@ public class TerminalCommand implements PluginCommand {
                         Placeholder.unparsed("out", output)
                     );
                 } else {
-                    String errorOutput = readProcessOutput(process.getErrorStream());
                     sender.sendRichMessage(
-                        "<failure>Command failed with exit code <exit-code>. Error:</failure>",
+                        "<failure>Command failed with exit code <exit-code>. Output:</failure>",
                         plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
-                        "<failure><err></failure>",
+                        "<failure><out></failure>",
                         plugin.getMessageTheme().getPaletteResolver(),
-                        Placeholder.unparsed("err", errorOutput)
+                        Placeholder.unparsed("out", output)
                     );
                 }
 

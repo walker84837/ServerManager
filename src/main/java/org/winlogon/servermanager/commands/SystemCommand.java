@@ -109,6 +109,7 @@ public class SystemCommand implements PluginCommand {
                 }
 
                 int exitCode = process.waitFor();
+                output = plugin.handleCommandOutput(output, sender);
 
                 if (exitCode == 0) {
                     sender.sendRichMessage(
@@ -236,6 +237,7 @@ public class SystemCommand implements PluginCommand {
                 }
 
                 int exitCode = process.waitFor();
+                output = plugin.handleCommandOutput(output, sender);
 
                 if (exitCode == 0) {
                     sender.sendRichMessage("<success>Command executed successfully. Output:</success>", plugin.getMessageTheme().getPaletteResolver());
@@ -245,19 +247,15 @@ public class SystemCommand implements PluginCommand {
                         Placeholder.unparsed("out", output)
                     );
                 } else {
-                    String errorOutput;
-                    try (var errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-                        errorOutput = errorReader.lines().collect(java.util.stream.Collectors.joining("\n"));
-                    }
                     sender.sendRichMessage(
-                        "<failure>Command failed with exit code <exit-code>. Error:</failure>",
+                        "<failure>Command failed with exit code <exit-code>. Output:</failure>",
                         plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
                     sender.sendRichMessage(
-                        "<failure><err></failure>",
+                        "<failure><out></failure>",
                         plugin.getMessageTheme().getPaletteResolver(),
-                        Placeholder.unparsed("err", errorOutput)
+                        Placeholder.unparsed("out", output)
                     );
                 }
 
