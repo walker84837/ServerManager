@@ -57,7 +57,18 @@ public final class ServerManagerPlugin extends JavaPlugin {
     @Getter
     private final ExecutorService processesExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    private PastebinUploader pastebinUploader;
+    private volatile PastebinUploader pastebinUploader;
+
+    private PastebinUploader getPastebinUploader() {
+        if (pastebinUploader == null) {
+            synchronized (this) {
+                if (pastebinUploader == null) {
+                    pastebinUploader = new PastebinUploader(mainConfig.pasteService.upload, getDataFolder().toPath(), logger);
+                }
+            }
+        }
+        return pastebinUploader;
+    }
 
     @Getter
     private ProcessManager processManager;
@@ -139,7 +150,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
 
     // Logs system info when enabling
     private void logSystemInfo() {
-        var si = new SystemInfo();
+        var si = processManager.getSystemInfo();
         var os = si.getOperatingSystem();
         var hal = si.getHardware();
 
@@ -221,15 +232,8 @@ public final class ServerManagerPlugin extends JavaPlugin {
     public void sendDiscordMessage(String message) {
         discordWebhookSender.ifPresentOrElse(
             sender -> sender.sendMessage(message),
-            () -> logger.warning("Tried to send message but webhooks are disabled" + message)
+            () -> logger.warning("Tried to send message but webhooks are disabled: " + message)
         );
-    }
-
-    private PastebinUploader getPastebinUploader() {
-        if (pastebinUploader == null) {
-            pastebinUploader = new PastebinUploader(mainConfig.pasteService.upload, getDataFolder().toPath(), logger);
-        }
-        return pastebinUploader;
     }
 
     /**

@@ -106,7 +106,7 @@ public class CronJobManager {
             var plugin = (ServerManagerPlugin) data.get("plugin");
             plugin.getLogger().info("Executing cron command: " + command);
 
-            // Execute the command as console on the main thread to interact with Bukkit API safely
+            // Execute the command as console via SchedulerAdapter (Folia-compatible async execution)
             plugin.getSchedulerAdapter().runNow(() -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
         }
     }

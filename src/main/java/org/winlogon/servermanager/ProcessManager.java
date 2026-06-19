@@ -65,6 +65,10 @@ public class ProcessManager {
         return Map.copyOf(runningProcesses);
     }
 
+    public SystemInfo getSystemInfo() {
+        return systemInfo;
+    }
+
     public void startProcess(String programName, CommandSender sender) {
         Result.<String, String>ok(programName)
           .andThen(this::isProcessNotRunning)
@@ -201,11 +205,14 @@ public class ProcessManager {
 
         // Discard output to prevent pipe-buffer deadlock.
         // Pre-launch / after-death commands are fire-and-forget — output is not needed.
-        new ProcessBuilder(args)
+        var proc = new ProcessBuilder(args)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start()
-            .waitFor();
+            .start();
+        if (!proc.waitFor(30, TimeUnit.SECONDS)) {
+            proc.destroyForcibly();
+            proc.waitFor();
+        }
     }
 
     /** Restarts the process if auto-restart is enabled in config */
@@ -242,10 +249,12 @@ public class ProcessManager {
      * @param sender the command sender to notify about success or failure
      */
     public void stopProcessAsync(String programName, CommandSender sender) {
-        pendingStops.add(programName);
         Optional.ofNullable(runningProcesses.get(programName))
             .ifPresentOrElse(
-                handle -> processesExecutor.submit(() -> stopProcessInternal(programName, handle, sender)),
+                handle -> {
+                    pendingStops.add(programName);
+                    processesExecutor.submit(() -> stopProcessInternal(programName, handle, sender));
+                },
                 () -> sendErrorMessage(sender, "Program '<program>' is not running!", programName)
             );
     }
