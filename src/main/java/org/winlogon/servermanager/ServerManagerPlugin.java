@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,7 +48,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
     @Getter
     private ServerManagerConfig mainConfig;
     @Getter
-    private final Map<String, ServiceConfig> serviceConfigs = new HashMap<>();
+    private final Map<String, ServiceConfig> serviceConfigs = new ConcurrentHashMap<>();
     private YamlConfigurationProperties configProperties;
 
     private CronJobManager cronJobManager;
@@ -132,6 +133,16 @@ public final class ServerManagerPlugin extends JavaPlugin {
             cronJobManager.shutdownScheduler();
         }
 
+        processesExecutor.shutdown();
+        try {
+            if (!processesExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                processesExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            processesExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
         logger.info("ServerManager has been disabled!");
     }
 
@@ -194,6 +205,10 @@ public final class ServerManagerPlugin extends JavaPlugin {
                 )));
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Failed to load service configs.", e);
+        }
+
+        if (serviceConfigs.isEmpty()) {
+            logger.info("No service configs found. Create .yml files in the services folder to define managed processes.");
         }
     }
 
@@ -296,6 +311,8 @@ public final class ServerManagerPlugin extends JavaPlugin {
 
         loadServiceConfigs();
         loadCronConfigs();
+        processManager.updateConfig(mainConfig, serviceConfigs);
+        setupDiscord();
 
         if (mainConfig.cronJobsEnabled && cronJobManager != null) {
             cronJobManager.startScheduler();

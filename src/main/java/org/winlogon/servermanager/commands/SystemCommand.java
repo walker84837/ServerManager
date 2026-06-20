@@ -55,7 +55,6 @@ public class SystemCommand implements PluginCommand {
     public SystemCommand(ServerManagerPlugin plugin) {
         this.plugin = plugin;
         this.commandExecutor = plugin.getProcessesExecutor();
-        registerIfNotExists(plugin);
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> createCommand() {
@@ -83,6 +82,15 @@ public class SystemCommand implements PluginCommand {
     }
 
     private int installPackage(CommandContext<CommandSourceStack> context) {
+        if (!plugin.getMainConfig().packageManagementEnabled) {
+            var sender = context.getSource().getSender();
+            sender.sendRichMessage(
+                "<failure>Package management commands are disabled by the server administrator.</failure>",
+                plugin.getMessageTheme().getPaletteResolver()
+            );
+            return 0;
+        }
+
         String packageName = StringArgumentType.getString(context, "package");
         var sender = context.getSource().getSender();
 

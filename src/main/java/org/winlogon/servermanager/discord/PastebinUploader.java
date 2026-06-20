@@ -70,20 +70,41 @@ public class PastebinUploader {
             return CompletableFuture.completedFuture(Optional.empty());
         }
 
-        var bodyPublisher = buildBodyPublisher(content);
+        HttpRequest.BodyPublisher bodyPublisher;
+        String contentType = null;
+
+        if ("multipart".equalsIgnoreCase(config.format)) {
+            var boundary = "----" + UUID.randomUUID();
+            var body = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"output.txt\"\r\n"
+                + "Content-Type: text/plain; charset=utf-8\r\n"
+                + "\r\n"
+                + content + "\r\n"
+                + "--" + boundary + "--\r\n";
+            bodyPublisher = HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8);
+            contentType = "multipart/form-data; boundary=" + boundary;
+        } else {
+            bodyPublisher = buildBodyPublisher(content);
+        }
+
         var requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create(config.url))
             .method(config.method.toUpperCase(), bodyPublisher);
 
-        if (!config.headers.containsKey("Content-Type")) {
+        if (contentType != null) {
+            requestBuilder.header("Content-Type", contentType);
+        } else if (!config.headers.containsKey("Content-Type")) {
             switch (config.format.toLowerCase()) {
                 case "json" -> requestBuilder.header("Content-Type", "application/json");
-                case "multipart" -> {} // set below with boundary
                 default -> requestBuilder.header("Content-Type", "text/plain; charset=utf-8");
             }
         }
 
         for (var entry : config.headers.entrySet()) {
+            // Skip Content-Type for multipart - already set with correct boundary
+            if (contentType != null && entry.getKey().equalsIgnoreCase("Content-Type")) {
+                continue;
+            }
             requestBuilder.header(entry.getKey(), entry.getValue());
         }
 
@@ -121,26 +142,11 @@ public class PastebinUploader {
                 var body = config.body.isEmpty() ? escaped : config.body.replace("{content}", escaped);
                 yield HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8);
             }
-            case "multipart" -> buildMultipartBody(sanitized);
             default -> { // text
                 var body = config.body.isEmpty() ? sanitized : config.body.replace("{content}", sanitized);
                 yield HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8);
             }
         };
-    }
-
-    private HttpRequest.BodyPublisher buildMultipartBody(String content) {
-        var boundary = "----" + UUID.randomUUID();
-        var body = "--" + boundary + "\r\n"
-            + "Content-Disposition: form-data; name=\"file\"; filename=\"output.txt\"\r\n"
-            + "Content-Type: text/plain; charset=utf-8\r\n"
-            + "\r\n"
-            + content + "\r\n"
-            + "--" + boundary + "--\r\n";
-        if (!config.headers.containsKey("Content-Type")) {
-            config.headers.put("Content-Type", "multipart/form-data; boundary=" + boundary);
-        }
-        return HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8);
     }
 
     private String extractUrl(String responseBody) {

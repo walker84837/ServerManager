@@ -4,6 +4,7 @@ import de.exlll.configlib.Comment;
 import de.exlll.configlib.Configuration;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Configuration
@@ -19,6 +20,9 @@ public class ServiceConfig {
 
     @Comment("Working directory for the program")
     public String workingDirectory = ".";
+
+    @Comment("Environment variables to set for the process (inherits system environment by default)")
+    public Map<String, String> environment = Map.of();
 
     @Comment("Duration to keep the program running before sending a kill signal (0 for indefinite)")
     public long duration = 0;

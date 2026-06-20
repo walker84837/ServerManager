@@ -20,6 +20,9 @@ public class ServerManagerConfig {
     @Comment("Maximum total memory (in MB) allowed for all processes managed by the plugin. Set to 0 for no limit.")
     public long totalMemoryLimitMB = 0;
 
+    @Comment("Enable or disable package management commands (/system install). Disabled by default for security.")
+    public boolean packageManagementEnabled = false;
+
     @Comment("Color palette for message theming")
     public PaletteConfig palette = new PaletteConfig();
 

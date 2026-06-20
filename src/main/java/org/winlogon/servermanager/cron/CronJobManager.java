@@ -30,7 +30,8 @@ public class CronJobManager {
 
         try {
             if (scheduler.isStarted()) {
-                throw new IllegalStateException("Scheduler is already started");
+                logger.info("Cron scheduler is already running, skipping start.");
+                return;
             }
         } catch (SchedulerException e) {
             logger.log(Level.SEVERE, "Failed to check scheduler status", e);

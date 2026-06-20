@@ -51,9 +51,7 @@ public class TerminalCommand implements PluginCommand {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
 
-        // Using the same executor as process management
         this.commandExecutor = plugin.getProcessesExecutor();
-        registerIfNotExists(plugin);
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> createCommand() {

@@ -37,16 +37,17 @@ import java.util.stream.Collectors;
 public class ProcessManager {
     private final ServerManagerPlugin plugin;
     private final Logger logger;
-    private final ServerManagerConfig mainConfig;
-    private final Map<String, ServiceConfig> serviceConfigs;
+    private volatile ServerManagerConfig mainConfig;
+    private volatile Map<String, ServiceConfig> serviceConfigs;
     private final Map<String, ProcessHandle> runningProcesses = new ConcurrentHashMap<>();
     private final Set<String> pendingStops = ConcurrentHashMap.newKeySet();
     private final ScheduledExecutorService monitorExecutor;
     private final ExecutorService processesExecutor;
+    private final Map<String, Process> runningProcessObjects = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<Void>> processFutures = new ConcurrentHashMap<>();
     private final SystemInfo systemInfo = new SystemInfo();
     private final OperatingSystem os = systemInfo.getOperatingSystem();
-    private final TagResolver palettes;
+    private volatile TagResolver palettes;
 
     public ProcessManager(
         ServerManagerPlugin plugin, ServerManagerConfig mainConfig, Map<String, ServiceConfig> serviceConfigs,
@@ -58,6 +59,12 @@ public class ProcessManager {
         this.serviceConfigs = serviceConfigs;
         this.monitorExecutor = monitorExecutor;
         this.processesExecutor = processesExecutor;
+        this.palettes = plugin.getMessageTheme().getPaletteResolver();
+    }
+
+    public void updateConfig(ServerManagerConfig mainConfig, Map<String, ServiceConfig> serviceConfigs) {
+        this.mainConfig = mainConfig;
+        this.serviceConfigs = serviceConfigs;
         this.palettes = plugin.getMessageTheme().getPaletteResolver();
     }
 
@@ -101,6 +108,8 @@ public class ProcessManager {
             ProcessHandle handle = process.toHandle();
 
             runningProcesses.put(programName, handle);
+            runningProcessObjects.put(programName, process);
+            drainProcessOutput(programName, process);
             scheduleDurationBasedKill(programName, config, handle, sender);
             setupProcessCompletionHandler(programName, config, process, sender);
 
@@ -136,8 +145,27 @@ public class ProcessManager {
             processBuilder.directory(new File(config.workingDirectory));
         }
 
+        // Merge environment variables (inherits system environment by default)
+        if (!config.environment.isEmpty()) {
+            var env = processBuilder.environment();
+            for (var entry : config.environment.entrySet()) {
+                env.put(entry.getKey(), entry.getValue());
+            }
+        }
+
         processBuilder.redirectErrorStream(true);
         return processBuilder.start();
+    }
+
+    /** Drains stdout/stderr from a managed process to prevent pipe buffer deadlocks */
+    private void drainProcessOutput(String programName, Process process) {
+        var inputStream = process.getInputStream();
+        processesExecutor.submit(() -> {
+            try (inputStream) {
+                inputStream.transferTo(java.io.OutputStream.nullOutputStream());
+            } catch (java.io.IOException ignored) {
+            }
+        });
     }
 
     /** Schedules a timer to kill the process after its configured duration */
@@ -173,6 +201,7 @@ public class ProcessManager {
     private void setupProcessCompletionHandler(String programName, ServiceConfig config, Process process, CommandSender sender) {
         CompletableFuture<Void> future = process.onExit().thenAccept(p -> {
             runningProcesses.remove(programName);
+            runningProcessObjects.remove(programName);
             processFutures.remove(programName);
 
             executeAfterDeathCommands(programName, config);
@@ -307,11 +336,44 @@ public class ProcessManager {
 
     public void stopAllProcesses() {
         pendingStops.clear();
-        runningProcesses.values().forEach(ProcessHandle::destroy);
-        runningProcesses.clear();
+
+        // First, request graceful shutdown for all processes
+        for (var process : runningProcessObjects.values()) {
+            try {
+                process.destroy();  // SIGTERM - allows graceful shutdown
+            } catch (Exception ignored) {}
+        }
+
+        // Wait for processes to exit gracefully (with timeout)
+        var exitFutures = new ArrayList<CompletableFuture<Process>>();
+        for (var entry : runningProcessObjects.entrySet()) {
+            var process = entry.getValue();
+            if (process.isAlive()) {
+                exitFutures.add(process.onExit().orTimeout(5, TimeUnit.SECONDS));
+            }
+        }
+        if (!exitFutures.isEmpty()) {
+            try {
+                CompletableFuture.allOf(exitFutures.toArray(new CompletableFuture[0]))
+                    .orTimeout(5, TimeUnit.SECONDS).join();
+            } catch (Exception ignored) {}
+        }
+
+        // Force-kill any processes that didn't exit gracefully
+        for (var entry : runningProcessObjects.entrySet()) {
+            var process = entry.getValue();
+            if (process.isAlive()) {
+                try {
+                    process.destroyForcibly();
+                    process.waitFor(2, TimeUnit.SECONDS);
+                } catch (Exception ignored) {}
+            }
+        }
 
         processFutures.values().forEach(future -> future.cancel(true));
         processFutures.clear();
+        runningProcesses.clear();
+        runningProcessObjects.clear();
     }
 
     public void runOOMKiller() {
@@ -334,6 +396,7 @@ public class ProcessManager {
         for (var entry : runningProcesses.entrySet()) {
             var process = entry.getValue();
             var name = entry.getKey();
+            // Safe for typical PIDs (Linux default max ~4M, well within int range)
             var pid = (int) process.pid();
 
             Optional.ofNullable(os.getProcess(pid))
