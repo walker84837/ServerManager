@@ -1,3 +1,4 @@
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.TimeZone
@@ -11,7 +12,7 @@ plugins {
 group = "org.winlogon.servermanager"
 
 extra["projectDescription"] = "A server management utility"
-extra["minecraftBase"] = "1.21.10"
+extra["minecraftBase"] = "1.21.11"
 
 val providers = project.providers
 
@@ -42,7 +43,7 @@ val shortVersionProvider = providers.provider {
 }
 
 version = shortVersionProvider.flatMap { shortVer ->
-    if (shortVer.isNullOrBlank()) {
+    if (shortVer.isBlank()) {
         return@flatMap timestampProvider.map { timestamp -> "$timestamp-SNAPSHOT" }
     }
 
@@ -83,7 +84,33 @@ tasks.test {
     useJUnitPlatform()
 }
 
+val downloadGplLicense by tasks.registering {
+    description = "Downloads the GPL license to the root of the final JAR (compliance with LGPL-3.0)"
+    val outputFile: File = layout.buildDirectory.file("gplv3/LICENSE-GPLv3").get().asFile
+    outputs.file(outputFile)
+    doLast {
+        outputFile.parentFile.mkdirs()
+        ant.withGroovyBuilder {
+            "get"(
+                "src" to "https://www.gnu.org/licenses/gpl-3.0.txt",
+                "dest" to outputFile,
+                "skipexisting" to true
+            )
+        }
+    }
+}
+
 tasks.processResources {
+    dependsOn(downloadGplLicense)
+
+    from(rootProject.file("LICENSE")) {
+        into(".")
+    }
+
+    from(layout.buildDirectory.dir("gplv3")) {
+        include("LICENSE-GPLv3")
+    }
+
     val taskProjectNameProvider = providers.provider { project.rootProject.name }
     val taskProjectVersionProvider = providers.provider { project.version.toString() }
     val taskProjectGroupProvider = providers.provider { project.group.toString() }

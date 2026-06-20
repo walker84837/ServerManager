@@ -22,13 +22,10 @@ import org.winlogon.servermanager.discord.DiscordWebhookSender;
 import org.winlogon.servermanager.discord.PastebinUploader;
 import org.winlogon.servermanager.platform.SchedulerAdapter;
 
-import oshi.SystemInfo;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -112,7 +109,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         logSystemInfo();
         setupDiscord();
 
-        logger.info("ServerManager has been enabled!");
+        logger.info(String.format("ServerManager v%s — Free as in freedom. Licensed under LGPLv3.", getPluginMeta().getVersion()));
     }
 
     @Override

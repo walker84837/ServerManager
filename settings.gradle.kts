@@ -29,7 +29,7 @@ dependencyResolutionManagement {
 }
 
 extra["minecraftBase"] = "1.21"
-extra["minecraftPatch"] = "${extra["minecraftBase"]}.10"
+extra["minecraftPatch"] = "${extra["minecraftBase"]}.11"
 extra["projectDescription"] = "A Minecraft plugin to allow server admins to manage servers within containerized environments."
 
 gradle.beforeProject {
