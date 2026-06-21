@@ -42,18 +42,16 @@ val shortVersionProvider = providers.provider {
     }
 }
 
-version = shortVersionProvider.flatMap { shortVer ->
-    if (shortVer.isBlank()) {
-        return@flatMap timestampProvider.map { timestamp -> "$timestamp-SNAPSHOT" }
+version = if (project.hasProperty("ver")) {
+    val ver = project.property("ver") as String
+    val shortVer = if (ver.startsWith("v")) ver.substring(1) else ver
+    if (shortVer.contains("-RC-")) {
+        shortVer.substringBefore("-RC-") + "-SNAPSHOT"
+    } else {
+        shortVer.uppercase()
     }
-
-    project.providers.provider {
-        if (shortVer.contains("-RC-")) {
-            shortVer.substringBefore("-RC-") + "-SNAPSHOT"
-        } else {
-            shortVer
-        }
-    }
+} else {
+    timestampProvider.get() + "-SNAPSHOT"
 }
 
 java {
