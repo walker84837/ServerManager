@@ -38,7 +38,7 @@ public class PaletteConfig {
 
     @Comment("Details color for data values")
     @SerializeWith(serializer = NamedTextColorSerializer.class)
-    public NamedTextColor details = NamedTextColor.DARK_AQUA;
+    public NamedTextColor details = NamedTextColor.GRAY;
 
     @Comment("Color for section headers (e.g., === System Health ===)")
     @SerializeWith(serializer = NamedTextColorSerializer.class)
@@ -46,7 +46,7 @@ public class PaletteConfig {
 
     @Comment("Color for inline labels (e.g., OS:, CPU:, Total:)")
     @SerializeWith(serializer = NamedTextColorSerializer.class)
-    public NamedTextColor label = NamedTextColor.DARK_GRAY;
+    public NamedTextColor label = NamedTextColor.DARK_AQUA;
 
     public PaletteConfig() {
     }
