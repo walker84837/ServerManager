@@ -162,19 +162,19 @@ public class SystemCommand implements PluginCommand {
         long availableMemory = hardware.getMemory().getAvailable();
         long usedMemory = totalMemory - availableMemory;
 
-        sender.sendRichMessage("<secondary>=== RAM Usage ===</secondary>", plugin.getMessageTheme().getPaletteResolver());
+        sender.sendRichMessage("<header>=== RAM Usage ===</header>", plugin.getMessageTheme().getPaletteResolver());
         sender.sendRichMessage(
-            "<foreground>Total: <total></foreground>",
+            "<label>Total:</label> <details><total></details>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("total", FormatUtil.formatBytes(totalMemory))
         );
         sender.sendRichMessage(
-            "<success>Used: <used></success>",
+            "<label>Used:</label> <warning><used></warning>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("used", FormatUtil.formatBytes(usedMemory))
         );
         sender.sendRichMessage(
-            "<primary>Available: <avail></primary>",
+            "<label>Available:</label> <success><avail></success>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("avail", FormatUtil.formatBytes(availableMemory))
         );
@@ -185,7 +185,7 @@ public class SystemCommand implements PluginCommand {
     private int checkStorageUsage(CommandContext<CommandSourceStack> context) {
         var sender = context.getSource().getSender();
 
-        sender.sendRichMessage("<secondary>=== Storage Usage ===</secondary>", plugin.getMessageTheme().getPaletteResolver());
+        sender.sendRichMessage("<header>=== Storage Usage ===</header>", plugin.getMessageTheme().getPaletteResolver());
 
         var roots = File.listRoots();
         for (var root : roots) {
@@ -198,10 +198,10 @@ public class SystemCommand implements PluginCommand {
 
                 sender.sendRichMessage(
                     """
-                    <details>Drive: <path></details>
-                      <foreground>Total: <total></foreground>
-                      <success>Used: <used></success>
-                      <secondary>Available: <avail></secondary>
+                    <label>Drive:</label> <details><path></details>
+                      <label>Total:</label> <details><total></details>
+                      <label>Used:</label> <warning><used></warning>
+                      <label>Available:</label> <success><avail></success>
                     """,
                     plugin.getMessageTheme().getPaletteResolver(),
                     Placeholder.unparsed("path", root.getAbsolutePath()),
@@ -229,7 +229,7 @@ public class SystemCommand implements PluginCommand {
         var sender = source.getSender();
 
         sender.sendRichMessage(
-            "<secondary>Executing shell command: <cmd></secondary>",
+            "<header>Executing shell command:</header> <details><cmd></details>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("cmd", command)
         );
@@ -295,17 +295,17 @@ public class SystemCommand implements PluginCommand {
     private int systemHealth(CommandContext<CommandSourceStack> context) {
         var sender = context.getSource().getSender();
 
-        sender.sendRichMessage("<secondary>=== System Health ===</secondary>", plugin.getMessageTheme().getPaletteResolver());
+        sender.sendRichMessage("<header>=== System Health ===</header>", plugin.getMessageTheme().getPaletteResolver());
 
         sender.sendRichMessage(
-            "<details>OS: <family> <version></details>",
+            "<label>OS:</label> <details><family> <version></details>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("family", os.getFamily()),
             Placeholder.unparsed("version", os.getVersionInfo().toString())
         );
 
         sender.sendRichMessage(
-            "<details>CPU: <cpu></details>",
+            "<label>CPU:</label> <details><cpu></details>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("cpu", hardware.getProcessor().getProcessorIdentifier().getName())
         );
@@ -314,7 +314,7 @@ public class SystemCommand implements PluginCommand {
         long availableMemory = hardware.getMemory().getAvailable();
         long usedMemory = totalMemory - availableMemory;
         sender.sendRichMessage(
-            "<details>RAM Used: <used> / <total></details>",
+            "<label>RAM Used:</label> <details><used> / <total></details>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("used", FormatUtil.formatBytes(usedMemory)),
             Placeholder.unparsed("total", FormatUtil.formatBytes(totalMemory))
@@ -329,19 +329,19 @@ public class SystemCommand implements PluginCommand {
                 loadAverage[2]
             );
             sender.sendRichMessage(
-                "<details>CPU Load Average (1m, 5m, 15m): <stats></details>",
+                "<label>CPU Load Average (1m, 5m, 15m):</label> <details><stats></details>",
                 plugin.getMessageTheme().getPaletteResolver(),
                 Placeholder.unparsed("stats", stats)
             );
         }
 
         var runningProcesses = plugin.getProcessManager().getRunningProcesses();
-        sender.sendRichMessage("<secondary>Managed Processes:</secondary>", plugin.getMessageTheme().getPaletteResolver());
+        sender.sendRichMessage("<header>Managed Processes:</header>", plugin.getMessageTheme().getPaletteResolver());
         if (runningProcesses.isEmpty()) {
             sender.sendRichMessage("<placeholder>  No managed processes running.</placeholder>", plugin.getMessageTheme().getPaletteResolver());
         } else {
             runningProcesses.forEach((name, handle) -> sender.sendRichMessage(
-                "<success>  - <proc> (PID: <pid>)</success>",
+                "  <details><proc></details> <placeholder>(PID: <pid>)</placeholder>",
                 plugin.getMessageTheme().getPaletteResolver(),
                 Placeholder.unparsed("proc", name),
                 Placeholder.unparsed("pid", String.valueOf(handle.pid()))

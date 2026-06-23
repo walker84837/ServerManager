@@ -3,6 +3,7 @@ package org.winlogon.servermanager.discord;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.Getter;
 import net.thisptr.jackson.jq.BuiltinFunctionLoader;
 import net.thisptr.jackson.jq.JsonQuery;
 import net.thisptr.jackson.jq.Scope;
@@ -35,6 +36,7 @@ public class PastebinUploader {
     private final HttpClient httpClient;
     private final Scope jqScope;
     private final JsonQuery jqQuery;
+    @Getter
     private final boolean uploadEnabled;
 
     public PastebinUploader(PasteUploadConfig config, Path dataFolder, Logger logger) {
@@ -61,10 +63,6 @@ public class PastebinUploader {
         this.uploadEnabled = config.url != null && !config.url.isBlank();
     }
 
-    public boolean isUploadEnabled() {
-        return uploadEnabled;
-    }
-
     public CompletableFuture<Optional<String>> upload(String content) {
         if (!uploadEnabled) {
             return CompletableFuture.completedFuture(Optional.empty());
@@ -74,16 +72,31 @@ public class PastebinUploader {
         String contentType = null;
 
         if ("multipart".equalsIgnoreCase(config.format)) {
+            // Multipart/form-data requests need a unique boundary string. This boundary marks where one part
+            // ends and the next begins.
             var boundary = "----" + UUID.randomUUID();
-            var body = "--" + boundary + "\r\n"
-                + "Content-Disposition: form-data; name=\"file\"; filename=\"output.txt\"\r\n"
-                + "Content-Type: text/plain; charset=utf-8\r\n"
-                + "\r\n"
-                + content + "\r\n"
-                + "--" + boundary + "--\r\n";
+
+            // --- Build a multipart request body manually ---
+
+            var body = "--" + boundary + "\r\n" // a boundary line
+                    // headers describing the uploaded "part"
+                    + "Content-Disposition: form-data; name=\"file\"; filename=\"output.txt\"\r\n"
+                    + "Content-Type: text/plain; charset=utf-8\r\n"
+                    // a blank line
+                    + "\r\n"
+                    // the actual content
+                    + content + "\r\n"
+                    // a closing boundary
+                    + "--" + boundary + "--\r\n";
+
+            // Send the multipart body as a UTF-8 string
             bodyPublisher = HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8);
+
+            // Tell the server this is multipart/form-data, and include the boundary
+            // so the HTTP server can parse the parts correctly
             contentType = "multipart/form-data; boundary=" + boundary;
         } else {
+            // For non-multipart requests, use the normal body format
             bodyPublisher = buildBodyPublisher(content);
         }
 
@@ -133,6 +146,20 @@ public class PastebinUploader {
         return path;
     }
 
+    /**
+     * Builds an HTTP request body publisher for the current output format.
+     * <p>
+     * For JSON output, the content is JSON-escaped before being inserted into the request body.
+     * <p>
+     * For all other formats, the content is treated as plain text and null characters are stripped out before use.
+     * <p>
+     * If {@code config.body} is not empty, it is used as a template and
+     * {@code {content}} is replaced with the processed content. Otherwise, the
+     * processed content is sent directly as the request body.
+     *
+     * @param content the raw content to include in the request body
+     * @return a {@link HttpRequest.BodyPublisher} containing the formatted body
+     */
     private HttpRequest.BodyPublisher buildBodyPublisher(String content) {
         var sanitized = stripNulls(content);
 
@@ -187,6 +214,7 @@ public class PastebinUploader {
                 case '\r' -> sb.append("\\r");
                 case '\t' -> sb.append("\\t");
                 default -> {
+                    // Format non-printable characters as "\\uXXXX"
                     if (c < ' ') {
                         sb.append(String.format("\\u%04x", (int) c));
                     } else {

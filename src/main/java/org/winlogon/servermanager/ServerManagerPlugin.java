@@ -268,7 +268,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
                     uploader.upload(rawOutput).thenAccept(url -> {
                         if (url != null && url.isPresent()) {
                             sender.sendRichMessage(
-                                "<placeholder>Full output: <url></placeholder>",
+                                "<label>Full output:</label> <primary><url></primary>",
                                 messageTheme.getPaletteResolver(),
                                 Placeholder.unparsed("url", url.get()));
                         }
@@ -291,7 +291,7 @@ public final class ServerManagerPlugin extends JavaPlugin {
         try {
             var path = getPastebinUploader().saveToFile(rawOutput);
             sender.sendRichMessage(
-                "<placeholder>Full output saved to: <path></placeholder>",
+                "<label>Full output saved to:</label> <primary><path></primary>",
                 messageTheme.getPaletteResolver(),
                 Placeholder.unparsed("path", path.toString()));
         } catch (IOException e) {

@@ -4,6 +4,7 @@ import com.github.walker84837.JResult.Result;
 
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 
+import lombok.Getter;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 
@@ -45,6 +46,7 @@ public class ProcessManager {
     private final ExecutorService processesExecutor;
     private final Map<String, Process> runningProcessObjects = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<Void>> processFutures = new ConcurrentHashMap<>();
+    @Getter
     private final SystemInfo systemInfo = new SystemInfo();
     private final OperatingSystem os = systemInfo.getOperatingSystem();
     private volatile TagResolver palettes;
@@ -70,10 +72,6 @@ public class ProcessManager {
 
     public Map<String, ProcessHandle> getRunningProcesses() {
         return Map.copyOf(runningProcesses);
-    }
-
-    public SystemInfo getSystemInfo() {
-        return systemInfo;
     }
 
     public void startProcess(String programName, CommandSender sender) {
@@ -109,7 +107,7 @@ public class ProcessManager {
 
             runningProcesses.put(programName, handle);
             runningProcessObjects.put(programName, process);
-            drainProcessOutput(programName, process);
+            drainProcessOutput(process);
             scheduleDurationBasedKill(programName, config, handle, sender);
             setupProcessCompletionHandler(programName, config, process, sender);
 
@@ -148,9 +146,7 @@ public class ProcessManager {
         // Merge environment variables (inherits system environment by default)
         if (!config.environment.isEmpty()) {
             var env = processBuilder.environment();
-            for (var entry : config.environment.entrySet()) {
-                env.put(entry.getKey(), entry.getValue());
-            }
+            env.putAll(config.environment);
         }
 
         processBuilder.redirectErrorStream(true);
@@ -158,7 +154,7 @@ public class ProcessManager {
     }
 
     /** Drains stdout/stderr from a managed process to prevent pipe buffer deadlocks */
-    private void drainProcessOutput(String programName, Process process) {
+    private void drainProcessOutput(Process process) {
         var inputStream = process.getInputStream();
         processesExecutor.submit(() -> {
             try (inputStream) {
@@ -308,7 +304,7 @@ public class ProcessManager {
         var newlineCollector = Collectors.joining("\n");
 
         var runningProcessEntries = runningProcesses.entrySet().stream()
-            .map(entry -> "  - <success>" + entry.getKey() + " (PID: " + entry.getValue().pid() + ")</success>")
+            .map(entry -> "  <details>" + entry.getKey() + "</details> <placeholder>(PID: " + entry.getValue().pid() + ")</placeholder>")
             .collect(newlineCollector);
 
         var availablePrograms = serviceConfigs.keySet().stream()
@@ -320,10 +316,10 @@ public class ProcessManager {
             .collect(newlineCollector);
 
         var message = """
-            <secondary>=== Running Processes ===</secondary>
+            <header>=== Running Processes ===</header>
             <placeholder><running_processes></placeholder>
 
-            <secondary>=== Available Programs ===</secondary>
+            <header>=== Available Programs ===</header>
             <available_programs>
             """;
 
@@ -478,7 +474,7 @@ public class ProcessManager {
 
     /** Sends a warning message with the configured palette styling */
     private void sendWarningMessage(CommandSender sender, String message, String programName) {
-        sender.sendRichMessage("<primary>" + message + "</primary>",
+        sender.sendRichMessage("<warning>" + message + "</warning>",
             palettes, Placeholder.unparsed("program", programName)
         );
     }
@@ -488,13 +484,24 @@ public class ProcessManager {
         sender.sendRichMessage("<success>" + message + "</success>", palettes);
     }
 
-    /** Handles errors during process startup and sends error message to sender */
+    /**
+     * Handles errors that occur during program startup by sending an error message to the specified sender, logging
+     * the exception, and sending a webhook to Discord.
+     *
+     * @param programName The name of the program that failed to start.
+     * @param sender The CommandSender to notify of the startup failure.
+     * @param e The Exception that caused the startup failure.
+     * @param context Additional context about the startup failure, such as the stage of initialization
+     *                that failed (e.g., "During plugin initialization", "While loading configuration").
+     */
     private void handleStartupFailure(String programName, CommandSender sender, Exception e, String context) {
         sender.sendRichMessage(
-            "<failure>" + context + " '<program>': " + e.getMessage() + "</failure>",
-            palettes, Placeholder.unparsed("program", programName)
+            "<failure><error-context> '<program>': <exception></failure>",
+            palettes, Placeholder.unparsed("program", programName),
+            Placeholder.unparsed("error-context", context),
+            Placeholder.unparsed("exception", e.getMessage())
         );
-        logger.severe(context + " '" + programName + "': " + e.getMessage());
+        logger.log(Level.SEVERE, context + " '" + programName + "'", e);
         plugin.sendDiscordMessage("Failed to start '" + programName + "': " + e.getMessage());
     }
 
@@ -505,7 +512,7 @@ public class ProcessManager {
             palettes, Placeholder.unparsed("program", programName),
             Placeholder.unparsed("exception", e.getMessage())
         );
-        logger.severe("Failed to stop program '" + programName + "': " + e.getMessage());
+        logger.log(Level.SEVERE, "Failed to stop program '" + programName + "'", e);
         plugin.sendDiscordMessage("Failed to stop '" + programName + "': " + e.getMessage());
     }
 

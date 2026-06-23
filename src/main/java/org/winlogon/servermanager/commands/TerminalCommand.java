@@ -67,7 +67,7 @@ public class TerminalCommand implements PluginCommand {
         var sender = context.getSource().getSender();
 
         sender.sendRichMessage(
-            "<primary>Executing command: <cmd></primary>",
+            "<header>Executing command:</header> <details><cmd></details>",
             plugin.getMessageTheme().getPaletteResolver(),
             Placeholder.unparsed("cmd", command)
         );
