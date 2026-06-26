@@ -68,6 +68,7 @@ dependencies {
     compileOnly(libs.lombok)
     compileOnly(libs.asynccraftr)
     compileOnly(libs.jackson.jq)
+
     annotationProcessor(libs.lombok)
 
     testCompileOnly(libs.lombok)
@@ -84,17 +85,38 @@ tasks.test {
 
 val downloadGplLicense by tasks.registering {
     description = "Downloads the GPL license to the root of the final JAR (compliance with LGPL-3.0)"
+
     val outputFile: File = layout.buildDirectory.file("gplv3/LICENSE-GPLv3").get().asFile
     outputs.file(outputFile)
+
     doLast {
         outputFile.parentFile.mkdirs()
-        ant.withGroovyBuilder {
-            "get"(
-                "src" to "https://www.gnu.org/licenses/gpl-3.0.txt",
-                "dest" to outputFile,
-                "skipexisting" to true
-            )
+
+        var lastError: Exception? = null
+
+        repeat(3) { attempt ->
+            try {
+                ant.withGroovyBuilder {
+                    "get"(
+                        "src" to "https://www.gnu.org/licenses/gpl-3.0.txt",
+                        "dest" to outputFile,
+                        "skipexisting" to true
+                    )
+                }
+                return@doLast
+            } catch (e: Exception) {
+                lastError = e
+                if (attempt < 2) {
+                    logger.warn(
+                        "Failed to download GPL license (attempt ${attempt + 1}/3), " +
+                            "retrying..."
+                    )
+                    Thread.sleep(1000)
+                }
+            }
         }
+
+        throw lastError ?: RuntimeException("Failed to download GPL license")
     }
 }
 
