@@ -5,7 +5,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextDecoration;
 
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class AnsiComponentDecoder {
