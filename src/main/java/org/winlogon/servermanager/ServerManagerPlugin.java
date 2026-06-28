@@ -9,6 +9,8 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 
 import lombok.Getter;
 
+
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
 import org.bukkit.command.CommandSender;
@@ -252,6 +254,13 @@ public final class ServerManagerPlugin extends JavaPlugin {
      * Truncates output if it exceeds the configured max length, then asynchronously
      * uploads to the paste service or saves to a file. Returns the text to display.
      */
+    public Component handleCommandOutputComponent(String rawOutput, CommandSender sender) {
+        // Reuse existing truncation/upload logic
+        String processed = handleCommandOutput(rawOutput, sender);
+        // Convert ANSI escape sequences to Adventure Component
+        return AnsiComponentDecoder.decode(processed);
+    }
+
     public String handleCommandOutput(String rawOutput, CommandSender sender) {
         var maxLength = mainConfig.pasteService.maxOutputLength;
         if (maxLength <= 0 || rawOutput.length() <= maxLength) {

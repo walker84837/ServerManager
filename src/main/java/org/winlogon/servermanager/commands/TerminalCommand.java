@@ -81,22 +81,14 @@ public class TerminalCommand implements PluginCommand {
 
                 if (exitCode == 0) {
                     sender.sendRichMessage("<success>Command executed successfully. Output:</success>", plugin.getMessageTheme().getPaletteResolver());
-                    sender.sendRichMessage(
-                        "<foreground><out></foreground>",
-                        plugin.getMessageTheme().getPaletteResolver(),
-                        Placeholder.unparsed("out", output)
-                    );
+                    sender.sendMessage(plugin.handleCommandOutputComponent(output, sender));
                 } else {
                     sender.sendRichMessage(
                         "<failure>Command failed with exit code <exit-code>. Output:</failure>",
                         plugin.getMessageTheme().getPaletteResolver(),
                         Placeholder.unparsed("exit-code", String.valueOf(exitCode))
                     );
-                    sender.sendRichMessage(
-                        "<failure><out></failure>",
-                        plugin.getMessageTheme().getPaletteResolver(),
-                        Placeholder.unparsed("out", output)
-                    );
+                    sender.sendMessage(plugin.handleCommandOutputComponent(output, sender));
                 }
 
             } catch (Exception e) {
