@@ -3,6 +3,7 @@ version: ${VERSION}
 main: ${PACKAGE}.ServerManagerPlugin
 description: ${DESCRIPTION}
 api-version: ${MCVERSION}
+website: "https://github.com/walker84837/ServerManager"
 loader: ${PACKAGE}.ServerManagerLoader
 authors: ["winlogon"]
 folia-supported: true

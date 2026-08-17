@@ -113,7 +113,7 @@ public class TerminalCommand implements PluginCommand {
     }
 
     private String readProcessOutput(InputStream inputStream) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+        try (var reader = new BufferedReader(new InputStreamReader(inputStream))) {
             return reader.lines().collect(Collectors.joining("\n"));
         }
     }
