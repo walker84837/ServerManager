@@ -1,6 +1,6 @@
 package org.winlogon.servermanager;
 
-import com.github.walker84837.JResult.Result;
+import org.winlogon.jresult.Result;
 
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 

@@ -1,7 +1,7 @@
 [versions]
 shadow = "9.3.0"
 paper-api = "1.21.11-R0.1-SNAPSHOT"
-jresult = "1.4.0"
+jresult = "2.0.0"
 configlib-paper = "4.6.3"
 oshi-core = "6.4.0"
 quartz = "2.3.2"
@@ -13,7 +13,7 @@ jackson-jq = "1.6.1"
 
 [libraries]
 paper-api = { group = "io.papermc.paper", name = "paper-api", version.ref = "paper-api" }
-jresult = { group = "com.github.walker84837", name = "JResult", version.ref = "jresult" }
+jresult = { group = "org.winlogon", name = "jresult", version.ref = "jresult" }
 configlib-paper = { group = "de.exlll", name = "configlib-paper", version.ref = "configlib-paper" }
 oshi-core = { group = "com.github.oshi", name = "oshi-core", version.ref = "oshi-core" }
 quartz = { group = "org.quartz-scheduler", name = "quartz", version.ref = "quartz" }

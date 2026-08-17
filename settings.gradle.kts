@@ -24,7 +24,6 @@ dependencyResolutionManagement {
         }
         maven("https://maven.winlogon.org/releases")
         maven("https://repo.codemc.org/repository/maven-public/")
-        maven("https://jitpack.io")
     }
 }
 
